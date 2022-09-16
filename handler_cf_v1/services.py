@@ -1,5 +1,4 @@
 from .apps import *
-import uuid
 from google.cloud import tasks_v2
 import json
 
@@ -26,7 +25,7 @@ class AbstractService:
 
         return super().handle_success(db, collection)
 
-    def handle_error(self, error, error_handler, retry_handler, task_info):
+    def handle_error(self, error, error_handler, retry_handler, task_info, recipients):
 
         handler = error_handler if self.job['retry_attempt'] < 3 else retry_handler
 
@@ -44,6 +43,7 @@ class AbstractService:
         if "error_handler" in handler:
             body['job'] = self.job
             body['error'] = error
+            task['http_request']['url'] = f"{handler}?to={recipients}"
         else:
             self.job['retry_attempt'] += 1
             body = self.job
