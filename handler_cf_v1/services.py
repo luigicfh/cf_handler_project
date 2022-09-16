@@ -82,7 +82,8 @@ class MissionRealty(AbstractService):
 
             lead = self.app.add_new_lead(self.job['request'])
 
-        notes_response = self.app.add_note(lead['id'])
+        notes_response = self.app.add_note(
+            lead['id'], self.job['request']['notes'])
 
         if not notes_response['success']:
 
