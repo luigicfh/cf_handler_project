@@ -4,7 +4,11 @@ import json
 from .exceptions import ApiError
 
 
-class SierraInteractive:
+class AbstractApp:
+    pass
+
+
+class SierraInteractive(AbstractApp):
 
     def __init__(self, api_key: str, originating_system: str) -> None:
         self.api_key = api_key
