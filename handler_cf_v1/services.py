@@ -70,12 +70,14 @@ class MissionRealty(AbstractService):
     def __init__(self, config: dict, job: dict, app) -> None:
         self.config = config
         self.job = job
-        self.app = app
+        self.app = app(self.config['params']['apiKey'], 'AT')
         super(MissionRealty, self).__init__(config, job, app)
 
     def execute_service(self) -> dict:
 
         # add disposition ternary operator when notes are empty
+
+        notes = self.job['request']['notes'] if self.job['request']['notes'] else self.job['request']['disposition']
 
         lead = self.app.find_leads(
             f"+1{self.job['request']['phone']}", self.job['request']['email'])
@@ -85,7 +87,7 @@ class MissionRealty(AbstractService):
             lead = self.app.add_new_lead(self.job['request'])
 
         notes_response = self.app.add_note(
-            lead['id'], self.job['request']['notes'])
+            lead['id'], notes)
 
         if not notes_response['success']:
 
