@@ -7,10 +7,10 @@ JOB_STATES = ["queued", "completed", "skipped", "error"]
 
 class AbstractService:
 
-    def __init__(self, config: dict, job: dict) -> None:
+    def __init__(self, config: dict, job: dict, app) -> None:
         self.config = config
         self.job = job
-        self.app = None
+        self.app = app
         self.content_type = {"Content-type": "application/json"}
 
     def execute_service(self):
@@ -67,13 +67,15 @@ class AbstractService:
 
 class MissionRealty(AbstractService):
 
-    def __init__(self, config: dict, job: dict) -> None:
+    def __init__(self, config: dict, job: dict, app) -> None:
         self.config = config
         self.job = job
-        self.app = SierraInteractive(self.config['params']['apiKey'], 'AT')
-        super(MissionRealty, self).__init__(config, job)
+        self.app = app
+        super(MissionRealty, self).__init__(config, job, app)
 
     def execute_service(self) -> dict:
+
+        # add disposition ternary operator when notes are empty
 
         lead = self.app.find_leads(
             f"+1{self.job['request']['phone']}", self.job['request']['email'])
