@@ -94,10 +94,13 @@ class SierraInteractive(AbstractApp):
         :raise ApiError when lead creation is not successful.
         """
 
+        if not payload['email']:
+            return ApiError(400)
+
         response = requests.post(
-            self.add_new_lead_ep,
-            self.headers,
-            json.dumps(payload)
+            url=self.add_new_lead_ep,
+            headers=self.headers,
+            data=json.dumps(payload)
         )
 
         if response.status_code != 200:
