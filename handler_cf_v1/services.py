@@ -26,7 +26,7 @@ class AbstractService:
 
     def handle_error(self, error, error_handler, retry_handler, task_info, recipients):
 
-        handler = error_handler if self.job['retry_attempt'] < 3 else retry_handler
+        handler = retry_handler if self.job['retry_attempt'] < 3 else error_handler
 
         task = {
             "http_request": {
