@@ -80,7 +80,7 @@ class MissionRealty(AbstractService):
         notes = self.job['request']['notes'] if self.job['request']['notes'] else self.job['request']['disposition']
 
         lead = self.app.find_leads(
-            f"+1{self.job['request']['phone']}", self.job['request']['email'])
+            lead_phone=f"+1{self.job['request']['phone']}", lead_email=self.job['request']['email'])
 
         if not lead:
 
