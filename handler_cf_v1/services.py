@@ -22,7 +22,7 @@ class AbstractService:
 
         doc_ref.update(self.job)
 
-        return super().handle_success(db, collection)
+        return self.job
 
     def handle_error(self, error, error_handler, retry_handler, task_info, recipients):
 
@@ -61,7 +61,7 @@ class AbstractService:
             request={"parent": parent, "task": task}
         )
 
-        return super().handle_error()
+        return handler
 
 
 class MissionRealty(AbstractService):
