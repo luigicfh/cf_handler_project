@@ -15,16 +15,16 @@ class AbstractService:
     def execute_service(self):
         pass
 
-    def handle_success(self, db, collection):
+    def handle_success(self, db_data):
 
-        doc_ref = db.collection(collection).document(
+        doc_ref = db_data["db"].collection(db_data["collection"]).document(
             self.job['id'])
 
         doc_ref.update(self.job)
 
         return self.job
 
-    def handle_error(self, error, error_handler, retry_handler, task_info, recipients):
+    def handle_error(self, error, error_handler, retry_handler, task_info, recipients, db_data):
 
         handler = retry_handler if self.job['retry_attempt'] < 3 else error_handler
 
@@ -43,6 +43,7 @@ class AbstractService:
             body['job'] = self.job
             body['error'] = error
             task['http_request']['url'] = f"{handler}?to={recipients}"
+            self.job['state_msg'] = error
         else:
             self.job['retry_attempt'] += 1
             body = self.job
@@ -60,6 +61,9 @@ class AbstractService:
         client.create_task(
             request={"parent": parent, "task": task}
         )
+
+        # added as a way to update de job state and error messages
+        self.handle_success(db_data)
 
         return handler
 
