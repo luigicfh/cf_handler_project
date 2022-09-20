@@ -95,7 +95,8 @@ class SierraInteractive(AbstractApp):
         """
 
         if not payload['email']:
-            return ApiError(400)
+
+            raise ApiError(400)
 
         response = requests.post(
             url=self.add_new_lead_ep,
