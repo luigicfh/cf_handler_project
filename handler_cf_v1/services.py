@@ -29,6 +29,8 @@ class AbstractService:
 
     def handle_error(self, error, error_handler, retry_handler, task_info, recipients, db_data, service_account):
 
+        client = tasks_v2.CloudTasksClient()
+
         handler = retry_handler if self.job['retry_attempt'] < 3 else error_handler
 
         task_id = str(int(hashlib.sha256(
@@ -43,7 +45,7 @@ class AbstractService:
                     "audience": handler
                 }
             },
-            "name": task_id
+            "name": client.task_path(task_info['project'], task_info['location'], task_info['queue'], task_id)
         }
 
         task["http_request"]["headers"] = self.content_type
@@ -61,8 +63,6 @@ class AbstractService:
             body = self.job
 
         task["http_request"]["body"] = json.dumps(body).encode()
-
-        client = tasks_v2.CloudTasksClient()
 
         parent = client.queue_path(
             task_info['project'],
