@@ -40,15 +40,14 @@ class AbstractService:
         body = {}
 
         if "error_handler" in handler:
+            self.job['state'] = JOB_STATES[3]
+            self.job['state_msg'] = str(error)
             body['job'] = self.job
-            body['error'] = error
-            body['job']['created'] = body['job']['created'].isoformat()
+            body['error'] = str(error)
             task['http_request']['url'] = f"{handler}?to={recipients}"
-            self.job['state_msg'] = error
         else:
             self.job['retry_attempt'] = self.job['retry_attempt'] + 1
             body = self.job
-            body['created'] = body['job']['created'].isoformat()
 
         task["http_request"]["body"] = json.dumps(body).encode()
 
