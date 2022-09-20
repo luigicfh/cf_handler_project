@@ -1,5 +1,8 @@
 from google.cloud import tasks_v2
 import json
+import uuid
+import hashlib
+import os
 
 JOB_STATES = ["queued", "completed", "skipped", "error"]
 
@@ -24,15 +27,23 @@ class AbstractService:
 
         return self.job
 
-    def handle_error(self, error, error_handler, retry_handler, task_info, recipients, db_data):
+    def handle_error(self, error, error_handler, retry_handler, task_info, recipients, db_data, service_account):
 
         handler = retry_handler if self.job['retry_attempt'] < 3 else error_handler
+
+        task_id = str(int(hashlib.sha256(
+            str(uuid.uuid4()).encode('utf-8')).hexdigest(), 16) % 10**19)
 
         task = {
             "http_request": {
                 "http_method": tasks_v2.HttpMethod.POST,
-                "url": handler
-            }
+                "url": handler,
+                "oidc_token": {
+                    "service_account_email": service_account,
+                    "audience": handler
+                }
+            },
+            "name": task_id
         }
 
         task["http_request"]["headers"] = self.content_type
