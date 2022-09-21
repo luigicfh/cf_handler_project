@@ -160,10 +160,10 @@ class MultiLeadUpdate(AbstractService):
                     number_field_index = fields.index(
                         f"number{i+1}")
 
-                    if value['values']['data'][number_field_index] is None:
+                    if value['values']['data'][number_field_index+1] is None:
                         continue
 
                     dnc_list.append(value['values']['data']
-                                    [number_field_index])
+                                    [number_field_index+1])
 
         return dnc_list
