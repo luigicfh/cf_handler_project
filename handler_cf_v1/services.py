@@ -133,7 +133,7 @@ class MultiLeadUpdate(AbstractService):
 
             return self.job
 
-        self.app.configuration.addNumbersToDnc(dnc_list)
+        app_instance.addNumbersToDnc(dnc_list)
 
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = {
