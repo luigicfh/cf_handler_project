@@ -48,3 +48,43 @@ class MissionRealty(AbstractService):
         self.job['state_msg'] = notes_response
 
         return self.job
+
+
+class OwnLaHomes(AbstractService):
+
+    def __init__(self, config: dict, job: dict, app) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        super().__init__(config, job, app)
+
+    def execute_service(self):
+
+        app_instance = self.app(self.config['params']['apiKey'], 'AT')
+
+        notes = self.job['request']['notes'] if self.job['request']['notes'] else self.job['request']['disposition']
+
+        lead = app_instance.find_leads(
+            lead_phone=f"+1{self.job['request']['phone']}", lead_email=self.job['request']['email'])
+
+        if not lead:
+
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = "Lead not found, update skipped"
+
+            return self.job
+
+        lead_id = lead['leadId'] if 'leadId' in lead else lead['id']
+
+        notes_response = app_instance.add_note(
+            lead_id, notes)
+
+        if not notes_response['success']:
+
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = notes_response
+
+        self.job['state'] = JOB_STATES[1]
+        self.job['state_msg'] = notes_response
+
+        return self.job
