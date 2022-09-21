@@ -96,7 +96,7 @@ class SierraInteractive(AbstractApp):
 
         if not payload['email']:
 
-            raise ApiError(400)
+            raise Exception("Email is required for creating leads")
 
         response = requests.post(
             url=self.add_new_lead_ep,

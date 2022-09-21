@@ -1,9 +1,3 @@
-from google.cloud import tasks_v2
-import json
-import uuid
-import hashlib
-import os
-
 JOB_STATES = ["queued", "completed", "skipped", "error"]
 
 
@@ -17,67 +11,6 @@ class AbstractService:
 
     def execute_service(self):
         pass
-
-    def handle_success(self, db_data):
-
-        doc_ref = db_data["db"].collection(db_data["collection"]).document(
-            self.job['id'])
-
-        doc_ref.update(self.job)
-
-        return self.job
-
-    def handle_error(self, error, error_handler, retry_handler, task_info, recipients, db_data, service_account):
-
-        client = tasks_v2.CloudTasksClient()
-
-        handler = retry_handler if self.job['retry_attempt'] < 3 else error_handler
-
-        task_id = str(int(hashlib.sha256(
-            str(uuid.uuid4()).encode('utf-8')).hexdigest(), 16) % 10**19)
-
-        task = {
-            "http_request": {
-                "http_method": tasks_v2.HttpMethod.POST,
-                "url": handler,
-                "oidc_token": {
-                    "service_account_email": service_account,
-                    "audience": handler
-                }
-            },
-            "name": client.task_path(task_info['project'], task_info['location'], task_info['queue'], task_id)
-        }
-
-        task["http_request"]["headers"] = self.content_type
-
-        body = {}
-
-        if "error_handler" in handler:
-            self.job['state'] = JOB_STATES[3]
-            self.job['state_msg'] = str(error)
-            body['job'] = self.job
-            body['error'] = str(error)
-            task['http_request']['url'] = f"{handler}?to={recipients}"
-        else:
-            self.job['retry_attempt'] = self.job['retry_attempt'] + 1
-            body = self.job
-
-        task["http_request"]["body"] = json.dumps(body).encode()
-
-        parent = client.queue_path(
-            task_info['project'],
-            task_info['location'],
-            task_info['queue']
-        )
-
-        client.create_task(
-            request={"parent": parent, "task": task}
-        )
-
-        # added as a way to update de job state and error messages
-        self.handle_success(db_data)
-
-        return handler
 
 
 class MissionRealty(AbstractService):
