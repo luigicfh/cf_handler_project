@@ -2,13 +2,11 @@ from typing import Any
 import requests
 import json
 from .exceptions import ApiError
+from five9 import Five9
+from ast import literal_eval
 
 
-class AbstractApp:
-    pass
-
-
-class SierraInteractive(AbstractApp):
+class SierraInteractive:
 
     def __init__(self, api_key: str, originating_system: str) -> None:
         self.api_key = api_key
@@ -134,3 +132,16 @@ class SierraInteractive(AbstractApp):
             raise ApiError(response.status_code)
 
         return response.json()
+
+
+class Five9Custom(Five9):
+
+    def __init__(self, username, password):
+        super().__init__(username, password)
+
+    def search_contacts(self, criteria):
+
+        response = self.configuration.getContactRecords(
+            lookupCriteria=criteria)
+
+        return literal_eval(str(response))
