@@ -133,7 +133,7 @@ class MultiLeadUpdate(AbstractService):
 
             return self.job
 
-        app_instance.addNumbersToDnc(dnc_list)
+        app_instance.configuration.addNumbersToDnc(dnc_list)
 
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = {
@@ -150,8 +150,8 @@ class MultiLeadUpdate(AbstractService):
 
         for value in values:
 
-            extracted_values = [value['values']['data'][index]
-                                for index in indexes]
+            extracted_values = [value['values']['data'][index] if value['values']
+                                ['data'][index] is not None else "" for index in indexes]
 
             if extracted_values.sort() == list(request.values()).sort():
 
