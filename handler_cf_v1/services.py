@@ -104,7 +104,7 @@ class MultiLeadUpdate(AbstractService):
                                 ['user'], self.config['params']['password'])
 
         search_criteria = {
-            'contactIdField': 'number1',
+            'contactIdField': 'contact_id',
             'criteria': [{'field': field, 'value': self.job['request'][field]}
                          for field in self.job['request'].keys()]
         }
@@ -160,10 +160,10 @@ class MultiLeadUpdate(AbstractService):
                     number_field_index = fields.index(
                         f"number{i+1}")
 
-                    if value['values']['data'][number_field_index+1] is None:
+                    if value['values']['data'][number_field_index] is None:
                         continue
 
                     dnc_list.append(value['values']['data']
-                                    [number_field_index+1])
+                                    [number_field_index])
 
         return dnc_list
