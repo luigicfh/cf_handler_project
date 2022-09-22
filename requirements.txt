@@ -10,7 +10,8 @@ docutils==0.19
 five9==0.0.3b192
 google-api-core==2.10.1
 google-auth==2.11.0
-google-cloud-tasks==2.10.2
+google-cloud-core==2.3.2
+google-cloud-firestore==2.7.0
 googleapis-common-protos==1.56.4
 grpc-google-iam-v1==0.12.4
 grpcio==1.49.0

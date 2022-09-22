@@ -1,4 +1,7 @@
 from .apps import *
+from google.cloud import firestore
+import uuid
+from datetime import datetime
 JOB_STATES = ["queued", "completed", "skipped", "error"]
 
 
@@ -133,11 +136,18 @@ class MultiLeadUpdate(AbstractService):
 
             return self.job
 
-        app_instance.configuration.addNumbersToDnc(dnc_list)
+        dnc_job = {
+            "created": datetime.now(),
+            "numbers": dnc_list,
+            "request": self.job['request']
+        }
+
+        dnc_job_id = self.add_to_dnc_jobs(dnc_job)
 
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = {
-            "numbers_blocked": dnc_list
+            "numbersToDnc": dnc_list,
+            "dncJobId": dnc_job_id
         }
 
         return self.job
@@ -167,3 +177,16 @@ class MultiLeadUpdate(AbstractService):
                                     [number_field_index])
 
         return dnc_list
+
+    def add_to_dnc_jobs(self, doc):
+
+        db = firestore.Client(self.config['params']['project'])
+
+        job_id = str(uuid.uuid4())
+
+        doc_ref = db.collection(
+            self.config['params']['dncCollection']).document(job_id)
+
+        doc_ref.set(doc)
+
+        return job_id
