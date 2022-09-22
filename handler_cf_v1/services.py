@@ -1,4 +1,5 @@
 from .apps import *
+from .utils import *
 from google.cloud import firestore
 import uuid
 from datetime import datetime
@@ -184,9 +185,4 @@ class MultiLeadUpdate(AbstractService):
 
         job_id = str(uuid.uuid4())
 
-        doc_ref = db.collection(
-            self.config['params']['dncCollection']).document(job_id)
-
-        doc_ref.set(doc)
-
-        return job_id
+        return create_doc(db, self.config['params']['dncCollection'], job_id, doc)
