@@ -100,20 +100,30 @@ class MultiLeadUpdate(AbstractService):
         self.config = config
         self.job = job
         self.app = app
+        self.search_criteria = {
+            'contactIdField': 'contact_id',
+            'criteria': [{'field': field, 'value': self.job['request'][field]}
+                         for field in self.config['params']['searchFields']]
+        }
+        self.data_to_match = {value: self.job['request'][value]
+                              for value in self.config['params']['searchFields']}
+        self.number_to_skip = self.job['request']['DNIS'] if self.job['request'][
+            'type_name'] != "Inbound" else self.job['request']['ANI']
         super().__init__(config, job, app)
 
     def execute_service(self):
 
-        app_instance = self.app(self.config['params']
-                                ['user'], self.config['params']['password'])
+        if all([value == "" for value in self.data_to_match.values()]):
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = "All search values are empty"
+            return self.job
 
-        search_criteria = {
-            'contactIdField': 'contact_id',
-            'criteria': [{'field': field, 'value': self.job['request'][field]}
-                         for field in self.job['request'].keys()]
-        }
+        app_instance = self.app(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
 
-        contacts = app_instance.search_contacts(search_criteria)
+        contacts = app_instance.search_contacts(self.search_criteria)
 
         if contacts is None:
             self.job['state'] = JOB_STATES[2]
@@ -128,7 +138,7 @@ class MultiLeadUpdate(AbstractService):
             return self.job
 
         dnc_list = self.get_exact_match(
-            contacts['fields'], contacts['records'], self.job['request'])
+            contacts['fields'], contacts['records'], self.data_to_match, self.number_to_skip)
 
         if len(dnc_list) == 0:
 
@@ -139,8 +149,10 @@ class MultiLeadUpdate(AbstractService):
 
         dnc_job = {
             "created": datetime.now(),
-            "numbers": dnc_list,
-            "request": self.job['request']
+            "numbersToDnc": dnc_list,
+            "skippedNumber": self.number_to_skip,
+            "request": self.job['request'],
+            "state": self.job['state']
         }
 
         dnc_job_id = self.add_to_dnc_jobs(dnc_job)
@@ -148,12 +160,13 @@ class MultiLeadUpdate(AbstractService):
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = {
             "numbersToDnc": dnc_list,
+            "skippedNumber": self.number_to_skip,
             "dncJobId": dnc_job_id
         }
 
         return self.job
 
-    def get_exact_match(self, fields: list, values: list, request: dict):
+    def get_exact_match(self, fields: list, values: list, request: dict, skipped_number: str) -> list:
 
         dnc_list = []
 
@@ -174,15 +187,49 @@ class MultiLeadUpdate(AbstractService):
                     if value['values']['data'][number_field_index] is None:
                         continue
 
+                    if value['values']['data'][number_field_index] == skipped_number:
+                        continue
+
                     dnc_list.append(value['values']['data']
                                     [number_field_index])
 
         return dnc_list
 
-    def add_to_dnc_jobs(self, doc):
+    def add_to_dnc_jobs(self, doc: dict):
 
         db = firestore.Client(self.config['params']['project'])
 
-        job_id = str(uuid.uuid4())
+        doc_id = str(uuid.uuid4())
 
-        return create_doc(db, self.config['params']['dncCollection'], job_id, doc)
+        return create_doc(db, self.config['params']['dncCollection'], doc_id, doc)
+
+    def add_to_dnc(self, numbers: list) -> int:
+
+        app_instance = self.app(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
+
+        return app_instance.configuration.addNumbersToDnc(numbers)
+
+    def handle_success(self, jobs: list, query: list, db: firestore.Client, collection: str) -> str:
+
+        html_data = []
+
+        for i in range(len(jobs)):
+            jobs[i]['state'] = JOB_STATES[1]
+            update_doc(
+                db, collection, query[i].id, jobs[i])
+
+            html_data.append({
+                "campaign": jobs[i]['request']['campaign_name'],
+                "skipped_number": jobs[i]['skippedNumber'],
+                "numbers_to_dnc": ",".join(jobs[i]['numbersToDnc']),
+                "lead_name": f"{jobs[i]['request']['first_name']} {jobs[i]['request']['last_name']}",
+            })
+
+        return generate_markdown(html_data)
+
+    def handler_error(error, handler):
+
+        return handler(error)

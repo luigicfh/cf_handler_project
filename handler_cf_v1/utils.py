@@ -3,6 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
 import ssl
+import pandas as pd
 
 
 def get_doc(db: firestore.Client, collection: str, id: str) -> dict:
@@ -49,3 +50,10 @@ def send_email(sender: str, password: str, to: list, subject: str, body: str) ->
         server.sendmail(
             sender, to, message.as_string()
         )
+
+
+def generate_markdown(data):
+
+    df = pd.DataFrame(data=data)
+
+    return df.to_html(index=False)
