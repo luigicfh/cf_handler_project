@@ -1,9 +1,9 @@
 from .apps import *
 from .utils import *
-from google.cloud import firestore
-import uuid
-from datetime import datetime
+import os
+
 JOB_STATES = ["queued", "completed", "skipped", "error"]
+ENV_VAR_MSG = "Specified environment variable is not set."
 
 
 class AbstractService:
@@ -96,6 +96,26 @@ class OwnLaHomes(AbstractService):
 
 class MultiLeadUpdate(AbstractService):
 
+    """
+    Job data structure
+    {
+        "request": {
+            'first_name': str,
+            'last_name': str,
+            'email': str,
+            'type_name': str,
+            'DNIS': str,
+            'ANI': str,
+            'campaign_name': str
+        },
+        "state_msg": str or dict (depends on state),
+        "service_instance": dict,
+        "retry_attempt": int,
+        "created": datetime,
+        "state": str
+    }
+    """
+
     def __init__(self, config: dict, job: dict, app: Five9Custom) -> None:
         self.config = config
         self.job = job
@@ -147,21 +167,14 @@ class MultiLeadUpdate(AbstractService):
 
             return self.job
 
-        dnc_job = {
-            "created": datetime.now(),
-            "numbersToDnc": dnc_list,
-            "skippedNumber": self.number_to_skip,
-            "request": self.job['request'],
-            "state": self.job['state']
-        }
+        self.add_to_dnc(dnc_list)
 
-        dnc_job_id = self.add_to_dnc_jobs(dnc_job)
+        self.send_notification(dnc_list)
 
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = {
             "numbersToDnc": dnc_list,
-            "skippedNumber": self.number_to_skip,
-            "dncJobId": dnc_job_id
+            "skippedNumber": self.number_to_skip
         }
 
         return self.job
@@ -195,41 +208,39 @@ class MultiLeadUpdate(AbstractService):
 
         return dnc_list
 
-    def add_to_dnc_jobs(self, doc: dict):
-
-        db = firestore.Client(self.config['params']['project'])
-
-        doc_id = str(uuid.uuid4())
-
-        return create_doc(db, self.config['params']['dncCollection'], doc_id, doc)
-
     def add_to_dnc(self, numbers: list) -> int:
 
-        app_instance = self.app(
-            self.config['params']['user'],
-            self.config['params']['password']
-        )
+        if len(numbers) == 6 or len(numbers) == 5:
 
-        return app_instance.configuration.addNumbersToDnc(numbers)
+            list1 = numbers[:3]
+            list2 = numbers[3:]
 
-    def handle_success(self, jobs: list, query: list, db: firestore.Client, collection: str) -> str:
+            response1 = self.app.configuration.addNumbersToDnc(list1)
+            response2 = self.app.configuration.addNumbersToDnc(list2)
 
-        html_data = []
+            return response1 + response2
 
-        for i in range(len(jobs)):
-            jobs[i]['state'] = JOB_STATES[1]
-            update_doc(
-                db, collection, query[i].id, jobs[i])
+        return self.app.configuration.addNumbersToDnc(numbers)
 
-            html_data.append({
-                "campaign": jobs[i]['request']['campaign_name'],
-                "skipped_number": jobs[i]['skippedNumber'],
-                "numbers_to_dnc": ",".join(jobs[i]['numbersToDnc']),
-                "lead_name": f"{jobs[i]['request']['first_name']} {jobs[i]['request']['last_name']}",
-            })
+    def send_notification(self, dnc_list):
 
-        return generate_markdown(html_data)
+        for_markdown = {
+            "lead_name": f"{self.job['request']['first_name']} {self.job['request']['last_name']}",
+            "campaign": self.job['request']['campaign_name'],
+            "target_number": self.number_to_skip,
+            "dnc_numbers": ",".join(dnc_list)
+        }
 
-    def handler_error(error, handler):
+        markdown = generate_markdown(for_markdown)
 
-        return handler(error)
+        sender = os.environ.get('SENDER', ENV_VAR_MSG)
+        password = os.environ.get('PASSWORD', ENV_VAR_MSG)
+        recipients = os.environ.get('RECIPIENTS', ENV_VAR_MSG).split(",")
+        subject = f"AT Central Notifications | Person Of Interest Identified"
+        body = f"""
+            A new person of interest has been identified for campaign {for_markdown['campaign']}<br>
+            All other {len(dnc_list)} numbers were added to the DNC list.<br>∫
+            {markdown}
+        """
+
+        return send_email(sender, password, recipients, subject, body)
