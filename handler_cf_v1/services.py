@@ -167,7 +167,7 @@ class MultiLeadUpdate(AbstractService):
 
             return self.job
 
-        self.add_to_dnc(dnc_list)
+        self.add_to_dnc(dnc_list, app_instance)
 
         self.send_notification(dnc_list)
 
@@ -208,19 +208,19 @@ class MultiLeadUpdate(AbstractService):
 
         return dnc_list
 
-    def add_to_dnc(self, numbers: list) -> int:
+    def add_to_dnc(self, numbers: list, app_instance) -> int:
 
         if len(numbers) == 6 or len(numbers) == 5:
 
             list1 = numbers[:3]
             list2 = numbers[3:]
 
-            response1 = self.app.configuration.addNumbersToDnc(list1)
-            response2 = self.app.configuration.addNumbersToDnc(list2)
+            response1 = app_instance.configuration.addNumbersToDnc(list1)
+            response2 = app_instance.configuration.addNumbersToDnc(list2)
 
             return response1 + response2
 
-        return self.app.configuration.addNumbersToDnc(numbers)
+        return app_instance.configuration.addNumbersToDnc(numbers)
 
     def send_notification(self, dnc_list):
 
