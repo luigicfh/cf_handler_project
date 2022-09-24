@@ -54,6 +54,6 @@ def send_email(sender: str, password: str, to: list, subject: str, body: str) ->
 
 def generate_markdown(data):
 
-    df = pd.DataFrame(data=data)
+    df = pd.DataFrame(data=data, index=[0])
 
     return df.to_html(index=False)

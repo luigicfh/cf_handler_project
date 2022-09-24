@@ -231,7 +231,7 @@ class MultiLeadUpdate(AbstractService):
             "dnc_numbers": ",".join(dnc_list)
         }
 
-        markdown = generate_markdown(list(for_markdown))
+        markdown = generate_markdown(for_markdown)
 
         sender = os.environ.get('SENDER', ENV_VAR_MSG)
         password = os.environ.get('PASSWORD', ENV_VAR_MSG)
