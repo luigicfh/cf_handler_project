@@ -227,6 +227,7 @@ class MultiLeadUpdate(AbstractService):
         for_markdown = {
             "lead_name": f"{self.job['request']['first_name']} {self.job['request']['last_name']}",
             "campaign": self.job['request']['campaign_name'],
+            "disposition": self.job['request']['disposition_name'],
             "target_number": self.number_to_skip,
             "dnc_numbers": ",".join(dnc_list)
         }
