@@ -106,7 +106,8 @@ class MultiLeadUpdate(AbstractService):
             'type_name': str,
             'DNIS': str,
             'ANI': str,
-            'campaign_name': str
+            'campaign_name': str,
+            'disposition_name': str
         },
         "state_msg": str or dict (depends on state),
         "service_instance": dict,
