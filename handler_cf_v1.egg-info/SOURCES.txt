@@ -4,6 +4,7 @@ setup.cfg
 setup.py
 handler_cf_v1/__init__.py
 handler_cf_v1/apps.py
+handler_cf_v1/decorators.py
 handler_cf_v1/exceptions.py
 handler_cf_v1/services.py
 handler_cf_v1/utils.py
