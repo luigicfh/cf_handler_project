@@ -145,3 +145,14 @@ class Five9Custom(Five9):
             lookupCriteria=criteria)
 
         return literal_eval(str(response))
+
+    def get_campaign_profile(self, profile_name):
+
+        response = self.configuration.getCampaignProfiles(
+            namePattern=profile_name)
+
+        return literal_eval(str(response[0]))
+
+    def update_campaign_profile(self, profile_confing):
+
+        return self.configuration.modifyCampaignProfile(profile_confing)

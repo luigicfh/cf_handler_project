@@ -20,6 +20,13 @@ def create_doc(db: firestore.Client, collection: str, id: str, doc: dict):
     return id
 
 
+def query_doc(db: firestore.Client, collection: str, field: str, operator: str, value: str):
+
+    query = db.collection(collection).where(field, operator, value).get()
+
+    return query
+
+
 def update_doc(db: firestore.Client, collection: str, id: str, doc: dict, state_msg=None) -> dict:
 
     if state_msg:

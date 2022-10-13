@@ -1,6 +1,11 @@
 from .apps import *
 from .utils import *
 import os
+from google.cloud import firestore
+from bs4 import BeautifulSoup
+import requests
+from .decorators import func_exec_time
+from datetime import datetime
 
 JOB_STATES = ["queued", "completed", "skipped", "error"]
 ENV_VAR_MSG = "Specified environment variable is not set."
@@ -246,3 +251,390 @@ class MultiLeadUpdate(AbstractService):
         """
 
         return send_email(sender, password, recipients, subject, body)
+
+
+ROT_TYPES = ["spam_detection", "auto_rotation", "on_demand"]
+REQ_TYPES = ["auto_request", "spam_request"]
+
+
+class AniRotationEngine(AbstractService):
+
+    """
+    ENV variables
+    SENDER=str
+    PASSWOR=str
+    """
+
+    """
+    Service Configuration Structure
+    {
+        'className': 'str',
+        'webHook': 'str',
+        'appClassName': 'str',
+        'params': {
+            'project': 'str',
+            'collection': 'str',
+            'user': 'str',
+            'password': 'str'
+        },
+        'created': DatetimeWithNanoseconds,
+        'webHookDev': 'str',
+        'name': 'str'
+    }
+    """
+
+    """
+    Job data structure
+    {
+        "request": {
+            'field': str,
+            'type': str,
+            'schedule': str
+        },
+        "state_msg": str or dict (depends on state),
+        "service_instance": dict,
+        "retry_attempt": int,
+        "created": datetime,
+        "state": str
+    }
+    """
+
+    def __init__(self, config: dict, job: dict, app) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        self.robo_url = 'https://www.nomorobo.com/lookup/{}'
+        self.headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'accept-encoding': 'gzip, deflate, br',
+            'accept-language': 'en-US,en;q=0.8',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'
+        }
+
+        super().__init__(config, job, app)
+
+    @func_exec_time
+    def execute_service(self):
+
+        db = firestore.Client(self.config['params']['project'])
+        ani_rot_collection = self.config['params']['collection']
+        field = self.job['request']['field']
+        req_type = self.job['request']['type']
+
+        query = query_doc(db, ani_rot_collection, field,
+                          "==", self.job['request']['schedule'])
+
+        if len(query) == 0:
+
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = "No items configured for service."
+
+            return self.job
+
+        if req_type == ROT_TYPES[0]:
+
+            affected_profiles = self._execute_spam_service(
+                query, db, ani_rot_collection)
+
+            self.job['state'] = JOB_STATES[1]
+            self.job['state_msg'] = {
+                "success": True,
+                "affected_profiles": affected_profiles
+            }
+
+            return self.job
+
+        elif req_type == ROT_TYPES[1]:
+
+            affected_profiles = self._execute_auto_rotation_service(
+                query, db, ani_rot_collection)
+
+            self.job['state'] = JOB_STATES[1]
+            self.job['state_msg'] = {
+                "success": True,
+                "affected_profiles": affected_profiles
+            }
+
+            return self.job
+
+        elif req_type in REQ_TYPES:
+
+            self._execute_new_request_service(
+                query, db, ani_rot_collection, req_type)
+
+            self.job['state'] = JOB_STATES[1]
+            self.job['state_msg'] = {
+                "success": True
+            }
+
+        return super().execute_service()
+
+    def _execute_new_request_service(self, query, db, collection, req_type):
+
+        for config in query:
+
+            config_dict = config.to_dict()
+
+            self.send_new_request(config_dict, req_type)
+
+            update_doc(db, collection, config.id, config_dict)
+
+        return
+
+    def _execute_auto_rotation_service(self, query, db, collection):
+
+        app_instance = self.app(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
+
+        affected_profiles = []
+
+        for config in query:
+
+            config_dict = config.to_dict()
+
+            if len(config_dict['configuration']['aniPool']) == 1:
+                continue
+
+            if (all([ani['isSpam'] for ani in config_dict['configuration']['aniPool']])):
+                continue
+
+            if config_dict['configuration']['aniPool'][1]['isSpam']:
+                update_doc(db, collection, config.id, config_dict)
+                continue
+
+            new_ani_pool = self.rotate_ani(
+                config_dict['configuration']['aniPool'],
+                config_dict['configuration']['profiles'][0],
+                app_instance)
+
+            config_dict['configuration']['aniPool'] = new_ani_pool
+
+            update_doc(db, collection, config.id, config_dict)
+
+            self.notify_change(
+                new_ani_pool[0]['ani'],
+                new_ani_pool[-1]['ani'],
+                self.job['request']['type'],
+                config_dict['configuration']['notifications']['to'],
+                config_dict['configuration']['notifications']['cc'],
+                config_dict['configuration']['profiles'][0])
+
+            affected_profiles.append(
+                config_dict['configuration']['profiles'][0])
+
+        return affected_profiles
+
+    def _execute_spam_service(self, query, db, collection):
+
+        app_instance = self.app(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
+
+        affected_profiles = []
+
+        for config in query:
+
+            config_dict = config.to_dict()
+
+            if len(config_dict['configuration']['aniPool']) == 1:
+                continue
+
+            if (all([ani['isSpam'] for ani in config_dict['configuration']['aniPool']])):
+                self.send_new_request(config_dict, REQ_TYPES[1])
+                continue
+
+            is_spam = self._spam_detection(
+                config_dict['configuration']['aniPool'][0]['ani'])
+
+            if is_spam:
+
+                config_dict['configuration']['aniPool'][0]['isSpam'] = True
+
+                if config_dict['configuration']['aniPool'][1]['isSpam']:
+                    update_doc(db, collection, config.id, config_dict)
+                    continue
+
+                new_ani_pool = self.rotate_ani(
+                    config_dict['configuration']['aniPool'],
+                    config_dict['configuration']['profiles'][0],
+                    app_instance)
+
+                config_dict['configuration']['aniPool'] = new_ani_pool
+
+                update_doc(db, collection, config.id, config_dict)
+
+                self.notify_change(
+                    new_ani_pool[0]['ani'],
+                    new_ani_pool[-1]['ani'],
+                    self.job['request']['type'],
+                    config_dict['configuration']['notifications']['to'],
+                    config_dict['configuration']['notifications']['cc'],
+                    config_dict['configuration']['profiles'][0])
+
+                affected_profiles.append(
+                    config_dict['configuration']['profiles'][0])
+
+        return affected_profiles
+
+    def _spam_detection(self, ani):
+
+        ani_with_dashes = "{}-{}-{}".format(ani[:3], ani[3:6], ani[6::])
+
+        with requests.Session() as s:
+            response = s.get(url=self.robo_url.format(
+                ani_with_dashes), headers=self.headers)
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        for script in soup(["script", "style", "br", "footer", "ul", "nav"]):
+            script.extract()
+
+        text = (soup.get_text().replace('\n', '').strip())
+
+        answer = "404" not in text
+
+        return answer
+
+    def rotate_ani(self, ani_pool: list, profile, client):
+
+        profile = client.get_campaign_profile(profile)
+
+        profile_config = {
+            "ANI": ani_pool[1]['ani'],
+            "description": profile['description'],
+            "dialingSchedule": profile['dialingSchedule'],
+            "dialingTimeout": profile['dialingTimeout'],
+            "initialCallPriority": profile['initialCallPriority'],
+            "maxCharges": profile['maxCharges'],
+            "name": profile['name'],
+            "numberOfAttempts": profile['numberOfAttempts'],
+        }
+
+        client.update_campaign_profile(profile_config)
+
+        deactivated_ani = ani_pool.pop(0)
+
+        deactivated_ani['active'] = False
+
+        ani_pool.append(deactivated_ani)
+
+        ani_pool[0]['active'] = True
+
+        return ani_pool
+
+    def send_new_request(self, config, reason):
+
+        today = datetime.now().isoformat().split("T")[0]
+        area_codes = config['configuration']['requestSchedule']['areaCodes']
+        amount = 0
+
+        if not area_codes:
+            return
+
+        # accounts for first request
+        if 'newAniRequestData' not in config['configuration']:
+
+            if config['configuration']['requestSchedule']['onlyWhenSpam']:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool'] if ani['isSpam']])
+            else:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool']])
+
+            if amount == 0:
+                return
+
+            self.send_request(config, amount)
+
+            config['configuration']['newAniRequestData'] = {
+                'requested_on': today,
+                'reason': reason,
+                'amount': amount
+            }
+
+        # accounts for normal consecutive request
+        elif config['configuration']['newAniRequestData']['reason'] == REQ_TYPES[0]:
+
+            if config['configuration']['requestSchedule']['onlyWhenSpam']:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool'] if ani['isSpam']])
+            else:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool']])
+
+            if amount == 0:
+                return
+
+            self.send_request(config, amount)
+
+            config['configuration']['newAniRequestData'] = {
+                'requested_on': today,
+                'reason': reason,
+                'amount': amount
+            }
+
+        else:
+
+            # if all anis are still spam
+            if (all([ani['isSpam'] for ani in config['configuration']['aniPool']])):
+                return
+
+            if config['configuration']['requestSchedule']['onlyWhenSpam']:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool'] if ani['isSpam']])
+            else:
+                amount = len(
+                    [ani for ani in config['configuration']['aniPool']])
+
+            if amount == 0:
+                return
+
+            self.send_request(config, amount)
+
+            config['configuration']['newAniRequestData'] = {
+                'requested_on': today,
+                'reason': reason,
+                'amount': amount
+            }
+
+        return config
+
+    def send_request(self, config, amount):
+
+        sender = os.environ.get('SENDER', ENV_VAR_MSG)
+        password = os.environ.get('PASSWORD', ENV_VAR_MSG)
+        recipients = config['configuration']['requestSchedule']['recipients'].split(
+        ) + config['configuration']['requestSchedule']['cc'].split()
+
+        subject = "New DID request"
+
+        body = f"""
+        Hi {config['configuration']['requestSchedule']['recipients'].split(".")[0]} <br><br>
+        Can we please order {amount} new number{"s" if amount > 1 else ""} for {"any of the" if len(config['configuration']['requestSchedule']['areaCodes'].split(",")) > 1 else "the"} area code{"s" if len(config['configuration']['requestSchedule']['areaCodes'].split(",")) > 1 else ""}
+         listed below:<br><br>
+         {"<br>".join(config['configuration']['requestSchedule']['areaCodes'].split(","))}
+         <br>
+         Thanks!
+        """
+
+        return send_email(sender, password, recipients, subject, body)
+
+    def notify_change(self, new_ani, old_ani, reason, recipients, cc, profile):
+
+        sender = os.environ.get('SENDER', ENV_VAR_MSG)
+        password = os.environ.get('PASSWORD', ENV_VAR_MSG)
+        recipients_list = recipients.split(",") + cc.split(",")
+
+        subject = f"ANI Rotation Notifications | New ANI Activated For {profile}"
+
+        body = f"""
+        A new ANI has been activated for {profile} by the {reason.replace("_", " ").capitalize()} service.<br>
+        New ANI: {new_ani}<br>
+        Old ANI: {old_ani}
+        """
+
+        return send_email(sender, password, recipients_list, subject, body)
