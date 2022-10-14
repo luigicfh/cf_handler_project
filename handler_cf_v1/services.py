@@ -322,8 +322,14 @@ class AniRotationEngine(AbstractService):
         field = self.job['request']['field']
         req_type = self.job['request']['type']
 
-        query = query_doc(db, ani_rot_collection, field,
-                          "==", self.job['request']['schedule'])
+        if req_type != ROT_TYPES[2]:
+
+            query = query_doc(db, ani_rot_collection, field,
+                              "==", self.job['request']['schedule'])
+        else:
+
+            query = get_doc(db, ani_rot_collection,
+                            self.job['request']['id'])
 
         if len(query) == 0:
 
@@ -358,6 +364,14 @@ class AniRotationEngine(AbstractService):
 
             return self.job
 
+        elif req_type == ROT_TYPES[2]:
+
+            self._execute_on_demand_service(query)
+            self.job['state'] = JOB_STATES[1]
+            self.job['state_msg'] = {
+                "success": True
+            }
+
         elif req_type in REQ_TYPES:
 
             self._execute_new_request_service(
@@ -369,6 +383,31 @@ class AniRotationEngine(AbstractService):
             }
 
         return super().execute_service()
+
+    def _execute_on_demand_service(self, config):
+
+        app_instance = self.app(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
+
+        profile_obj = app_instance.get_campaign_profile(
+            config['configuration']['profiles'][0])
+
+        profile_config = {
+            "ANI": config['configuration']['aniPool'][0]['ani'],
+            "description": profile_obj['description'],
+            "dialingSchedule": profile_obj['dialingSchedule'],
+            "dialingTimeout": profile_obj['dialingTimeout'],
+            "initialCallPriority": profile_obj['initialCallPriority'],
+            "maxCharges": profile_obj['maxCharges'],
+            "name": profile_obj['name'],
+            "numberOfAttempts": profile_obj['numberOfAttempts'],
+        }
+
+        app_instance.update_campaign_profile(profile_config)
+
+        return self.notify_change(config['configuration']['aniPool'][0]['ani'], config['configuration']['aniPool'][1]['ani'], ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
 
     def _execute_new_request_service(self, query, db, collection, req_type):
 
