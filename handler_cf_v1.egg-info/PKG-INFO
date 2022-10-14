@@ -1,14 +1,14 @@
 Metadata-Version: 2.1
 Name: handler-cf-v1
-Version: 1.0.36
+Version: 1.0.37
 Summary: Testing installation of Package
 Home-page: https://github.com/luigicfh/cf_handler_module
-Download-URL: https://github.com/luigicfh/cf_handler_module/archive/refs/tags/1.0.36.tar.gz
+Download-URL: https://github.com/luigicfh/cf_handler_module/archive/refs/tags/1.0.37.tar.gz
 Author: Luis Moreno
 Author-email: luis.cfh.90@gmail.com
 License: MIT
 Project-URL: Bug Tracker, https://github.com/luigicfh/cf_handler_module/issues
-Keywords: pypi,handler_module,cloud_functions,beautifulsoup4
+Keywords: pypi,handler_module,cloud_functions
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
 Classifier: Topic :: Software Development :: Documentation
