@@ -4,7 +4,8 @@ import json
 from .exceptions import ApiError
 from five9 import Five9
 from ast import literal_eval
-
+import MySQLdb
+import datetime
 
 class SierraInteractive:
 
@@ -156,3 +157,75 @@ class Five9Custom(Five9):
     def update_campaign_profile(self, profile_confing):
 
         return self.configuration.modifyCampaignProfile(profile_confing)
+
+class Five9ToMySQL:
+
+    def __init__(self, request: json, config: dict) -> None:
+
+        self.data = self.parse_post_keys(request)
+        self.config = config
+        self.connection = MySQLdb.connect(host=config['host'], user=config['db_user'], passwd=config['db_password'], db=config['db'], port=3306, charset='utf8')
+        self.table = config['table']
+        self.columns = self.get_db_colums()
+        self.values = self.get_db_values()
+
+    def parse_post_keys(self, post: json) -> dict:
+        parsed_post = {}
+        for key in post.keys():
+            if " " in key:
+                new_key = key.replace(" ", "_").lower()
+                parsed_post[new_key] = post[key]
+                self.parse_post_date_time(new_key, parsed_post[new_key], parsed_post)
+            else:
+                new_key = key.lower()
+                parsed_post[new_key] = post[key]
+                self.parse_post_date_time(new_key, parsed_post[new_key], parsed_post)
+
+        return parsed_post
+
+    def parse_post_date_time(self, new_key: str, value: str, post: dict) -> None:
+        if "date" in new_key and 'time' not in new_key:
+            post[new_key] = '{}-{}-{}'.format(value[4:6], value[6:8], value[:4])
+        elif 'date' in new_key and 'time' in new_key:
+
+            post[new_key] = datetime.now().strptime("%m/%d/%Y, %H:%M:%S")
+        else:
+            pass 
+
+    def set_dynamic_fields(self) -> None:
+        live_answer = {
+            'live_answer': 'Yes' if self.data['disposition_name'] in self.config['live_answer'] else 'No'
+        }
+
+        conversation = {
+            'conversation': 'Yes' if self.data['disposition_name'] in self.config['conversation'] else 'No'
+        }
+
+        created_date_time = {
+            'created_date_time': datetime.now()
+        }
+
+        self.data[list(live_answer.keys())[0]] = list(live_answer.values())[0]
+        self.data[list(conversation.keys())[0]] = list(conversation.values())[0]
+        self.data[list(created_date_time.keys())[0]] = list(created_date_time.values())[0]
+
+    def get_db_colums(self) -> list:
+
+        self.set_dynamic_fields()
+
+        with self.connection.cursor() as cursor:
+            cursor.execute("SHOW COLUMNS FROM {}".format(self.table))
+            columns = cursor.fetchall()
+        return [column[0] for column in columns if column[0] != 'id' and column[0].lower() in self.data]
+
+    def get_db_values(self) -> list:
+
+        return [self.data[column.lower()] for column in self.columns if column.lower() in self.data]
+
+    def insert_data(self) -> None:
+            
+        with self.connection.cursor() as cursor:
+            query = "INSERT INTO {} ({}) VALUES ({})".format(self.table, ", ".join(self.columns), ", ".join(["%s"] * len(self.values)))
+            cursor.execute(query, self.values)
+            self.connection.commit()
+        self.connection.close()
