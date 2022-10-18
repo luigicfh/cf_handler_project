@@ -159,8 +159,18 @@ class Five9Custom(Five9):
         return self.configuration.modifyCampaignProfile(profile_confing)
 
 class Five9ToMySQL:
+    
+    """
+    Send data to MySQL remote database using MySQLdb
+     
+    :param str host: MySQL host
+    :param str db_user: MySQL user
+    :param str db_password: MySQL password
+    :param str db: MySQL database
+    :param str table: MySQL table
+    """
 
-    def __init__(self, request: json, config: dict) -> None:
+    def __init__(self, request: dict, config: dict) -> None:
 
         self.data = self.parse_post_keys(request)
         self.config = config
@@ -169,7 +179,7 @@ class Five9ToMySQL:
         self.columns = self.get_db_colums()
         self.values = self.get_db_values()
 
-    def parse_post_keys(self, post: json) -> dict:
+    def parse_post_keys(self, post: dict) -> dict:
         parsed_post = {}
         for key in post.keys():
             if " " in key:
