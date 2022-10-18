@@ -677,3 +677,27 @@ class AniRotationEngine(AbstractService):
         """
 
         return send_email(sender, password, recipients_list, subject, body)
+
+
+class MySQLUpdate(AbstractService):
+
+    def __init__(self, config: dict, job: dict, app: Five9ToMySQL) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        super().__init__(config, job, app)
+
+    def execute_service(self) -> dict:
+
+        app_instance = self.app(self.job['request'], self.config['params'])
+        
+        try:
+            app_instance.insert_data()
+            self.job['state'] = JOB_STATES[1]
+            self.job['state_msg'] = "Data inserted successfully."
+            
+        except Exception as e:
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = str(e)
+        
+        return self.job
