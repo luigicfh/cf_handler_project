@@ -162,12 +162,19 @@ class Five9ToMySQL:
     
     """
     Send data to MySQL remote database using MySQLdb
-     
-    :param str host: MySQL host
-    :param str db_user: MySQL user
-    :param str db_password: MySQL password
-    :param str db: MySQL database
-    :param str table: MySQL table
+    
+    Params to be passed:
+    
+    request: the request object
+    
+    config = {
+         
+        :param str host: MySQL host
+        :param str db_user: MySQL user
+        :param str db_password: MySQL password
+        :param str db: MySQL database
+        :param str table: MySQL table
+    }
     """
 
     def __init__(self, request: dict, config: dict) -> None:

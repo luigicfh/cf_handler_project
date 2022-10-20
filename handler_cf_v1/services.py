@@ -680,7 +680,38 @@ class AniRotationEngine(AbstractService):
 
 
 class MySQLUpdate(AbstractService):
+    
+    """
+    This service is responsible for updating the MySQL database.
+    
+    Config data structure
+    {
+        'className': 'str',
+        'webHook': 'str',
+        'appClassName': 'str',
+        'params': {
+            'host': 'str',
+            'db': 'str',
+            'db_user': 'str',
+            'db_password': 'str',
+            'table': 'str'
+        },
+        'created': DatetimeWithNanoseconds,
+        'webHookDev': 'str',
+        'name': 'str'
+    }
 
+    Job data structure
+    {
+        "request": dic,
+        "state_msg": str or dict (depends on state),
+        "service_instance": dict,
+        "retry_attempt": int,
+        "ctreated": datetime,
+        "state": str
+    }
+    """
+    
     def __init__(self, config: dict, job: dict, app: Five9ToMySQL) -> None:
         self.config = config
         self.job = job
