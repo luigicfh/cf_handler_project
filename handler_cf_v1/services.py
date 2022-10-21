@@ -705,8 +705,6 @@ class MySQLUpdate(AbstractService):
     {
         "request": dic,
         "state_msg": str or dict (depends on state),
-        "service_instance": dict,
-        "retry_attempt": int,
         "ctreated": datetime,
         "state": str
     }
@@ -722,13 +720,8 @@ class MySQLUpdate(AbstractService):
 
         app_instance = self.app(self.job['request'], self.config['params'])
         
-        try:
-            app_instance.insert_data()
-            self.job['state'] = JOB_STATES[1]
-            self.job['state_msg'] = "Data inserted successfully."
-            
-        except Exception as e:
-            self.job['state'] = JOB_STATES[2]
-            self.job['state_msg'] = str(e)
-        
+        app_instance.insert_data()
+        self.job['state'] = JOB_STATES[1]
+        self.job['state_msg'] = "Data inserted successfully."
+
         return self.job

@@ -205,7 +205,7 @@ class Five9ToMySQL:
             post[new_key] = '{}-{}-{}'.format(value[4:6], value[6:8], value[:4])
         elif 'date' in new_key and 'time' in new_key:
 
-            post[new_key] = datetime.now().strptime("%m/%d/%Y, %H:%M:%S")
+            post[new_key] = datetime.datetime.now().strptime("%m/%d/%Y, %H:%M:%S")
         else:
             pass 
 
@@ -219,7 +219,7 @@ class Five9ToMySQL:
         }
 
         created_date_time = {
-            'created_date_time': datetime.now()
+            'created_date_time': datetime.datetime.now()
         }
 
         self.data[list(live_answer.keys())[0]] = list(live_answer.values())[0]
