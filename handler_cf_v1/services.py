@@ -299,7 +299,7 @@ class AniRotationEngine(AbstractService):
     }
     """
 
-    def __init__(self, config: dict, job: dict, app) -> None:
+    def __init__(self, config: dict, job: dict, app: Five9Custom) -> None:
         self.config = config
         self.job = job
         self.app = app
@@ -314,7 +314,6 @@ class AniRotationEngine(AbstractService):
 
         super().__init__(config, job, app)
 
-    @func_exec_time
     def execute_service(self):
 
         db = firestore.Client(self.config['params']['project'])
@@ -407,7 +406,10 @@ class AniRotationEngine(AbstractService):
 
         app_instance.update_campaign_profile(profile_config)
 
-        return self.notify_change(config['configuration']['aniPool'][0]['ani'], config['configuration']['aniPool'][1]['ani'], ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
+        old_ani = config['configuration']['aniPool'][1]['ani'] if len(
+            config['configuration']['aniPool']) > 1 else 'ANI deleted from pool.'
+
+        return self.notify_change(config['configuration']['aniPool'][0]['ani'], old_ani, ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
 
     def _execute_new_request_service(self, query, db, collection, req_type):
 
@@ -489,33 +491,34 @@ class AniRotationEngine(AbstractService):
             is_spam = self._spam_detection(
                 config_dict['configuration']['aniPool'][0]['ani'])
 
-            if is_spam:
+            if not is_spam:
+                continue
 
-                config_dict['configuration']['aniPool'][0]['isSpam'] = True
+            config_dict['configuration']['aniPool'][0]['isSpam'] = True
 
-                if config_dict['configuration']['aniPool'][1]['isSpam']:
-                    update_doc(db, collection, config.id, config_dict)
-                    continue
-
-                new_ani_pool = self.rotate_ani(
-                    config_dict['configuration']['aniPool'],
-                    config_dict['configuration']['profiles'][0],
-                    app_instance)
-
-                config_dict['configuration']['aniPool'] = new_ani_pool
-
+            if config_dict['configuration']['aniPool'][1]['isSpam']:
                 update_doc(db, collection, config.id, config_dict)
+                continue
 
-                self.notify_change(
-                    new_ani_pool[0]['ani'],
-                    new_ani_pool[-1]['ani'],
-                    self.job['request']['type'],
-                    config_dict['configuration']['notifications']['to'],
-                    config_dict['configuration']['notifications']['cc'],
-                    config_dict['configuration']['profiles'][0])
+            new_ani_pool = self.rotate_ani(
+                config_dict['configuration']['aniPool'],
+                config_dict['configuration']['profiles'][0],
+                app_instance)
 
-                affected_profiles.append(
-                    config_dict['configuration']['profiles'][0])
+            config_dict['configuration']['aniPool'] = new_ani_pool
+
+            update_doc(db, collection, config.id, config_dict)
+
+            self.notify_change(
+                new_ani_pool[0]['ani'],
+                new_ani_pool[-1]['ani'],
+                self.job['request']['type'],
+                config_dict['configuration']['notifications']['to'],
+                config_dict['configuration']['notifications']['cc'],
+                config_dict['configuration']['profiles'][0])
+
+            affected_profiles.append(
+                config_dict['configuration']['profiles'][0])
 
         return affected_profiles
 
@@ -578,11 +581,9 @@ class AniRotationEngine(AbstractService):
         if 'newAniRequestData' not in config['configuration']:
 
             if config['configuration']['requestSchedule']['onlyWhenSpam']:
-                amount = len(
-                    [ani for ani in config['configuration']['aniPool'] if ani['isSpam']])
+                amount = 4
             else:
-                amount = len(
-                    [ani for ani in config['configuration']['aniPool']])
+                amount = 4
 
             if amount == 0:
                 return
@@ -599,11 +600,9 @@ class AniRotationEngine(AbstractService):
         elif config['configuration']['newAniRequestData']['reason'] == REQ_TYPES[0]:
 
             if config['configuration']['requestSchedule']['onlyWhenSpam']:
-                amount = len(
-                    [ani for ani in config['configuration']['aniPool'] if ani['isSpam']])
+                amount = 4
             else:
-                amount = len(
-                    [ani for ani in config['configuration']['aniPool']])
+                amount = 4
 
             if amount == 0:
                 return
@@ -668,6 +667,9 @@ class AniRotationEngine(AbstractService):
         password = os.environ.get('PASSWORD', ENV_VAR_MSG)
         recipients_list = recipients.split(",") + cc.split(",")
 
+        if len(recipients_list) == 0:
+            return
+
         subject = f"ANI Rotation Notifications | New ANI Activated For {profile}"
 
         body = f"""
@@ -677,3 +679,80 @@ class AniRotationEngine(AbstractService):
         """
 
         return send_email(sender, password, recipients_list, subject, body)
+
+
+class Five9ToMySQL(AbstractService):
+
+    def __init__(self, config: dict, job: dict, app: SQLDB) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        self.data = self.parse_post_keys(self.job['request'])
+        self.table = self.config['params']['db_credentials']['table']
+        super().__init__(config, job, app)
+
+    def execute_service(self):
+
+        app_instance = self.app(self.config['params']['db_credentials'])
+        table_columns = self.get_db_columns(app_instance)
+        values = self.get_db_values(table_columns)
+
+        self.insert(app_instance, table_columns, values)
+
+        self.job['state'] = JOB_STATES[1]
+        self.job['state_msg'] = {
+            "message": "success"
+        }
+
+        return self.job
+
+    def insert(self, db_engine: SQLDB, columns: list, values: list):
+        query_string = f"""INSERT INTO {self.table} ({", ".join(columns)}) VALUES ({", ".join(['%s' for col in columns])})"""
+        result = db_engine.execute_sql(query_string, values)
+        return result
+
+    def set_dynamic_fields(self):
+        live_answer = {'live_answer': 'Yes' if self.data['disposition_name']
+                       in self.config['params']['live_answer'] else "No"}
+        conversation = {'conversation': 'Yes' if self.data['disposition_name']
+                        in self.config['params']['conversation'] else "No"}
+
+        created_date_time = {
+            'created_date_time': datetime.now()}
+
+        self.data[list(live_answer.keys())[0]] = list(live_answer.values())[0]
+        self.data[list(conversation.keys())[0]] = list(
+            conversation.values())[0]
+        self.data[list(created_date_time.keys())[0]] = list(
+            created_date_time.values())[0]
+
+    def get_db_columns(self, db_engine):
+        self.set_dynamic_fields()
+        query = db_engine.execute_sql(f'SHOW columns FROM {self.table}')
+        return [column[0] for column in query if column[0] != 'id' and column[0].lower() in self.data]
+
+    def get_db_values(self, columns):
+        return [self.data[col.lower()] for col in columns if col.lower() in self.data]
+
+    def parse_post_keys(self, request):
+        parsed_request = {}
+        for key in request.keys():
+            if " " in key:
+                new_key = key.replace(" ", "_").lower()
+                parsed_request[new_key] = request[key]
+                self.parse_post_date_time(
+                    new_key, parsed_request[new_key], parsed_request)
+            else:
+                new_key = key.lower()
+                parsed_request[new_key] = request[key]
+                self.parse_post_date_time(
+                    new_key, parsed_request[new_key], parsed_request)
+
+        return parsed_request
+
+    def parse_post_date_time(self, new_key, value, request):
+        if "date" in new_key and 'time' not in new_key:
+            request[new_key] = '{}-{}-{}'.format(
+                value[4:6], value[6:8], value[:4])
+        if 'date' in new_key and 'time' in new_key:
+            request[new_key] = datetime.now().strptime("%m/%d/%Y, %H:%M:%S")

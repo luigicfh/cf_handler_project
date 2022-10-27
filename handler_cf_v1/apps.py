@@ -4,6 +4,7 @@ import json
 from .exceptions import ApiError
 from five9 import Five9
 from ast import literal_eval
+from sqlalchemy import create_engine
 
 
 class SierraInteractive:
@@ -156,3 +157,43 @@ class Five9Custom(Five9):
     def update_campaign_profile(self, profile_confing):
 
         return self.configuration.modifyCampaignProfile(profile_confing)
+
+
+class SQLDB:
+
+    def __init__(self, db_credentials) -> None:
+        self.db_credentials = db_credentials
+        self.conn_string = self.generate_conn_string(
+            user=self.db_credentials['user'],
+            password=self.db_credentials['password'],
+            host=self.db_credentials['host'],
+            schema=self.db_credentials['schema'],
+            conn_string=self.db_credentials['conn_string'],
+        )
+        self.engine = create_engine(self.conn_string)
+
+    def execute_sql(self, query_string, multiparams=None):
+
+        if self.engine is None:
+            raise Exception(
+                """
+                Unable to set DB Engine, please review
+                your connection string and try again.
+                """
+            )
+
+        with self.engine.connect() as conn:
+
+            if multiparams is None:
+                return conn.execute(query_string)
+
+            return conn.execute(query_string, multiparams)
+
+    def generate_conn_string(self, **kwargs):
+        user = kwargs.get('user')
+        password = kwargs.get('password')
+        host = kwargs.get('host')
+        schema = kwargs.get('schema')
+        conn_string = kwargs.get('conn_string')
+
+        return conn_string.format(user, password, host, schema)
