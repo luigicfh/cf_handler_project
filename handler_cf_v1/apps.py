@@ -31,33 +31,22 @@ class SierraInteractive:
         """
 
         if not lead_email:
-
             response = requests.get(
                 self.find_leads_ep.format(f'phone={lead_phone.strip()}'),
                 headers=self.headers
             )
-
             if response.status_code != 200:
-
                 raise ApiError(response.status_code)
-
             json_response = response.json()
-
             if json_response['data']['totalRecords'] > 0:
-
                 return json_response['data']['leads'][0]
-
             return None
-
         response = requests.get(
             self.retrieve_lead_details_ep.format(lead_email.strip()),
             headers=self.headers
         )
-
         if response.json()['success'] == True:
-
             return response.json()['data']
-
         return None
 
     def add_new_lead(self, payload: dict):
@@ -92,21 +81,15 @@ class SierraInteractive:
         :return the lead object (dict) of the record created in Sierra API.
         :raise ApiError when lead creation is not successful.
         """
-
         if not payload['email']:
-
             raise Exception("Email is required for creating leads")
-
         response = requests.post(
             url=self.add_new_lead_ep,
             headers=self.headers,
             data=json.dumps(payload)
         )
-
         if response.status_code != 200:
-
             raise ApiError(response.status_code)
-
         return response.json()['data']
 
     def add_note(self, lead_id: str, notes: str) -> Any:
@@ -117,21 +100,16 @@ class SierraInteractive:
         :return dict with success response
         :raises ApiError when response status code is not equal to 200.
         """
-
         message = {
             "message": notes
         }
-
         response = requests.post(
             url=self.add_note_ep.format(lead_id),
             headers=self.headers,
             data=json.dumps(message)
         )
-
         if response.status_code != 200:
-
             raise ApiError(response.status_code)
-
         return response.json()
 
 
@@ -141,22 +119,69 @@ class Five9Custom(Five9):
         super().__init__(username, password)
 
     def search_contacts(self, criteria):
-
         response = self.configuration.getContactRecords(
             lookupCriteria=criteria)
-
         return literal_eval(str(response))
 
     def get_campaign_profile(self, profile_name):
-
         response = self.configuration.getCampaignProfiles(
             namePattern=profile_name)
-
         return literal_eval(str(response[0]))
 
     def update_campaign_profile(self, profile_confing):
-
         return self.configuration.modifyCampaignProfile(profile_confing)
+
+    def get_inbound_campaigns(self):
+        response = self.configuration.getCampaigns(
+            campaignNamePattern=".*", campaignType="INBOUND")
+        return literal_eval(str(response))
+
+    def update_dnis_list(self, campaign_name: str, dnis_list: list):
+        return self.configuration.addDNISToCampaign(
+            campaignName=campaign_name,
+            DNISList=dnis_list
+        )
+
+
+class KvCore:
+
+    def __init__(self, api_token) -> None:
+        self.headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        self.get_contacts_list_ep = "https://api.kvcore.com/v2/public/contacts?filter[{}]={}"
+        self.add_note_ep = "https://api.kvcore.com/v2/public/contact/{}/action/note"
+
+    def get_contact(self, email):
+        if not email:
+            raise ApiError(400)
+        response = requests.get(
+            url=self.get_contacts_list_ep.format("email", email),
+            headers=self.headers
+        )
+        if response.status_code != 200:
+            raise ApiError(
+                response.status_code
+            )
+        json_data = response.json()
+        if json_data['total'] > 0:
+            return json_data['data'][0]
+        return None
+
+    def update_notes(self, contact_id, title, notes):
+        payload = json.dumps({
+            "title": title,
+            "details": notes
+        })
+        response = requests.put(
+            url=self.add_note_ep.format(contact_id),
+            headers=self.headers,
+            data=payload
+        )
+        if response.status_code == 200:
+            return response.json()
+        raise ApiError(response.status_code)
 
 
 class SQLDB:
@@ -173,20 +198,11 @@ class SQLDB:
         self.engine = create_engine(self.conn_string)
 
     def execute_sql(self, query_string, multiparams=None):
-
         if self.engine is None:
-            raise Exception(
-                """
-                Unable to set DB Engine, please review
-                your connection string and try again.
-                """
-            )
-
+            raise ApiError(500)
         with self.engine.connect() as conn:
-
             if multiparams is None:
                 return conn.execute(query_string)
-
             return conn.execute(query_string, multiparams)
 
     def generate_conn_string(self, **kwargs):
@@ -195,5 +211,4 @@ class SQLDB:
         host = kwargs.get('host')
         schema = kwargs.get('schema')
         conn_string = kwargs.get('conn_string')
-
         return conn_string.format(user, password, host, schema)
