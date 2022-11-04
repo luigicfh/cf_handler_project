@@ -612,8 +612,10 @@ class LeviKvCore(AbstractService):
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Contact not found with email: {self.job['request']['email']}"
             return self.job
+        notes = self.job['request']['comments'] if self.job['request']['comments'] != "" else self.job['request']['disposition_name']
         notes_response = app_instance.update_notes(
-            contact['id'], self.notes_title, self.job['request']['comments'])
+            contact['id'], self.notes_title, notes
+        )
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = notes_response
         return self.job
