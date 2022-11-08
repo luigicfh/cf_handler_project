@@ -585,7 +585,6 @@ class Five9ToMySQL(AbstractService):
                 parsed_request[new_key] = request[key]
                 self.parse_post_date_time(
                     new_key, parsed_request[new_key], parsed_request)
-
         return parsed_request
 
     def parse_post_date_time(self, new_key, value, request):

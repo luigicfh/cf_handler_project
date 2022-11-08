@@ -39,24 +39,28 @@ def update_doc(db: firestore.Client, collection: str, id: str, doc: dict, state_
 
 
 def send_email(sender: str, password: str, to: list, subject: str, body: str) -> None:
+    # try catch is necessary so email errors are not raised and
+    # the execution is not retried.
+    try:
+        message = MIMEMultipart("alternative")
+        message['Subject'] = subject
+        message['From'] = sender
+        message['To'] = ",".join(to)
 
-    message = MIMEMultipart("alternative")
-    message['Subject'] = subject
-    message['From'] = sender
-    message['To'] = ",".join(to)
+        part1 = MIMEText(body, "plain")
+        part2 = MIMEText(body, "html")
 
-    part1 = MIMEText(body, "plain")
-    part2 = MIMEText(body, "html")
+        message.attach(part1)
+        message.attach(part2)
 
-    message.attach(part1)
-    message.attach(part2)
-
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-        server.login(sender, password)
-        server.sendmail(
-            sender, to, message.as_string()
-        )
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(sender, password)
+            server.sendmail(
+                sender, to, message.as_string()
+            )
+    except smtplib.SMTPDataError:
+        pass
 
 
 def generate_markdown(data):

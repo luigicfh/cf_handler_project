@@ -155,7 +155,7 @@ class KvCore:
 
     def get_contact(self, email):
         if not email:
-            raise ApiError(400)
+            return None
         response = requests.get(
             url=self.get_contacts_list_ep.format("email", email),
             headers=self.headers
