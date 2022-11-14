@@ -640,7 +640,7 @@ class Five9ToGHL(AbstractService):
             self.config['params']['user'],
             self.config['params']['password']
         )
-        if "Inbound" not in self.data['type_name']:
+        if "Inbound" not in self.data['campaign_name']:
             location_id = five9_client.get_outbound_campaigns(
                 self.data['campaign_name'])[0]['description'].strip()
         if "Inbound" in self.data['campaign_name']:
