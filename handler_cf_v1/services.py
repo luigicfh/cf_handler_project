@@ -640,8 +640,12 @@ class Five9ToGHL(AbstractService):
             self.config['params']['user'],
             self.config['params']['password']
         )
-        location_id = five9_client.get_outbound_campaigns(
-            self.data['campaign_name'])[0]['description'].strip()
+        if "Inbound" not in self.data['type_name']:
+            location_id = five9_client.get_outbound_campaigns(
+                self.data['campaign_name'])[0]['description'].strip()
+        if "Inbound" in self.data['campaign_name']:
+            location_id = five9_client.get_inbound_campaigns(
+                self.data['campaign_name'])[0]['description'].strip()
         app_instance = self.app(self.config['params']['apiKey'], location_id)
         query = f"phone=+1{phone}&email={email}"
         contact = app_instance.contact_lookup(query)
