@@ -618,3 +618,113 @@ class LeviKvCore(AbstractService):
         self.job['state'] = JOB_STATES[1]
         self.job['state_msg'] = notes_response
         return self.job
+
+
+class Five9ToGHL(AbstractService):
+    def __init__(self, config: dict, job: dict, app: GHL) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        self.data = self.parse_post_keys(self.job['request'])
+        super().__init__(config, job, app)
+
+    def execute_service(self):
+        phone = self.data['dnis'] if self.data[
+            'type_name'] != "Inbound" else self.data['ani']
+        email = self.data['email']
+        if phone == "" and email == "":
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Request missing phone or email."
+            return self.job
+        five9_client = self.set_five9_client(
+            self.config['params']['user'],
+            self.config['params']['password']
+        )
+        location_id = five9_client.get_outbound_campaigns(
+            self.data['campaign_name'])[0]['description'].strip()
+        app_instance = self.app(self.config['params']['apiKey'], location_id)
+        query = f"phone=+1{phone}&email={email}"
+        contact = app_instance.contact_lookup(query)
+        if contact is None:
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Contact not found, skipping update."
+            return self.job
+        custom_fields = app_instance.get_custom_fields()
+        data = {
+            "firstName": self.data['first_name'],
+            "lastName": self.data['last_name'],
+            "email": self.data['email'],
+            "phone": "+1" + phone,
+            "address1": self.data['address'],
+            "city": self.data['city'],
+            "state": self.data['state'],
+            "postalCode": self.data['postal_code'],
+            "customField": self.set_custom_fields(self.data, contact, custom_fields)
+        }
+        contact_response = app_instance.update_contact(contact['id'], data)
+        notes_response = {}
+        if self.data['notes']:
+            notes_response = app_instance.add_notes(
+                contact['id'], self.data['notes'],
+                self.config['params']['userId']
+            )
+        self.job['state'] = JOB_STATES[1]
+        self.job['state_msg'] = {
+            'contact_response': contact_response,
+            'notes_response': notes_response
+        }
+        return self.job
+
+    def set_five9_client(self, username, password):
+        return Five9Custom(username, password)
+
+    def set_custom_fields(self, data, contact, custom_fields):
+        obj = {}
+        for field in custom_fields:
+            custom_field = field['fieldKey'].split(".")[1]
+            if custom_field in data.keys() and data[custom_field] != "":
+                if custom_field == "disposition":
+                    disposition = None
+                    if 'customField' in contact:
+                        disposition = self.is_disposition_set(
+                            field['id'], contact['customField'])
+                    if disposition and data[custom_field] == disposition.replace(".", ''):
+
+                        obj[field['id']] = disposition + "."
+                    else:
+                        obj[field['id']] = data[custom_field]
+                else:
+                    obj[field['id']] = data[custom_field]
+        return obj
+
+    def is_disposition_set(self, field_id, custom_fields_array):
+        for field in custom_fields_array:
+            if field_id == field['id']:
+                return field['value']
+        return False
+
+    def parse_post_keys(self, post):
+        parsed_post = {}
+        for key in post.keys():
+            if " " in key:
+                new_key = key.replace(" ", "_").lower()
+                parsed_post[new_key] = post[key]
+                self.parse_post_date_time(
+                    new_key, parsed_post[new_key], parsed_post)
+            else:
+                new_key = key.lower()
+                parsed_post[new_key] = post[key]
+                self.parse_post_date_time(
+                    new_key, parsed_post[new_key], parsed_post)
+
+        return parsed_post
+
+    def parse_post_date_time(self, new_key, value, post):
+        if "date" in new_key and 'time' not in new_key:
+            post[new_key] = '{}-{}-{}'.format(
+                value[4:6], value[6:8], value[:4])
+        elif 'date' in new_key and 'time' in new_key:
+            post[new_key] = '{}-{}-{} {}:{}'.format(
+                value[4:6], value[6:8], value[:4], value[8:10], value[10:12])
+        else:
+            pass
