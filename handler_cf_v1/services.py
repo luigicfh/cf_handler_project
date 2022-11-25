@@ -4,8 +4,9 @@ import os
 from google.cloud import firestore
 from bs4 import BeautifulSoup
 import requests
-from .decorators import func_exec_time
 from datetime import datetime
+import base64
+
 
 JOB_STATES = ["queued", "completed", "skipped", "error"]
 ENV_VAR_MSG = "Specified environment variable is not set."
@@ -499,7 +500,10 @@ class AniRotationEngine(AbstractService):
         password = os.environ.get('PASSWORD', ENV_VAR_MSG)
         recipients = config['configuration']['requestSchedule']['recipients'].split(
         ) + config['configuration']['requestSchedule']['cc'].split()
-        subject = "New DID request"
+        request_id = base64.b64encode(
+            config['configuration']['profiles'][0].encode("utf-8"))
+        encoded_id = str(request_id, "utf-8")
+        subject = f"New DID request - Request ID {encoded_id}"
         body = f"""
         Hi {config['configuration']['requestSchedule']['recipients'].split(".")[0]} <br><br>
         Can we please order {amount} new number{"s" if amount > 1 else ""} for {"any of the" if len(config['configuration']['requestSchedule']['areaCodes'].split(",")) > 1 else "the"} area code{"s" if len(config['configuration']['requestSchedule']['areaCodes'].split(",")) > 1 else ""}
