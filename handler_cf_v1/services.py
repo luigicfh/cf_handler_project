@@ -417,10 +417,10 @@ class AniRotationEngine(AbstractService):
         answer = "404" not in text
         return answer
 
-    def rotate_ani(self, ani_pool: list, profile, client):
-        profile = client.get_campaign_profile(profile)
+    def rotate_ani(self, ani_pool: list, profile_name, client):
+        profile = client.get_campaign_profile(profile_name)
         inbound_campaigns = [
-            c['name'] for c in client.get_inbound_campaigns() if c['profileName'] == profile]
+            c['name'] for c in client.get_inbound_campaigns() if c['profileName'] == profile['name']]
         profile_config = {
             "ANI": ani_pool[1]['ani'],
             "description": profile['description'],
