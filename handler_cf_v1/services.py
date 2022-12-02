@@ -314,7 +314,8 @@ class AniRotationEngine(AbstractService):
         self.rotate_ani(
             config['configuration']['aniPool'],
             config['configuration']['profiles'][0],
-            app_instance
+            app_instance,
+            True
         )
         old_ani = config['configuration']['aniPool'][1]['ani'] if len(
             config['configuration']['aniPool']) > 1 else 'ANI deleted from pool.'
@@ -409,12 +410,12 @@ class AniRotationEngine(AbstractService):
         answer = "404" not in text
         return answer
 
-    def rotate_ani(self, ani_pool: list, profile_name, client):
+    def rotate_ani(self, ani_pool: list, profile_name, client, on_demand=False):
         profile = client.get_campaign_profile(profile_name)
         inbound_campaigns = [
             c['name'] for c in client.get_inbound_campaigns() if c['profileName'] == profile['name']]
         profile_config = {
-            "ANI": ani_pool[1]['ani'],
+            "ANI": ani_pool[1]['ani'] if not on_demand else [ani_pool[0]['ani']],
             "description": profile['description'],
             "dialingSchedule": profile['dialingSchedule'],
             "dialingTimeout": profile['dialingTimeout'],
@@ -425,11 +426,13 @@ class AniRotationEngine(AbstractService):
         }
         client.update_campaign_profile(profile_config)
         for campaign in inbound_campaigns:
-            client.update_dnis_list(campaign, [ani_pool[1]['ani']])
-        deactivated_ani = ani_pool.pop(0)
-        deactivated_ani['active'] = False
-        ani_pool.append(deactivated_ani)
-        ani_pool[0]['active'] = True
+            client.update_dnis_list(
+                campaign, [ani_pool[1]['ani']] if not on_demand else [ani_pool[0]['ani']])
+        if not on_demand:
+            deactivated_ani = ani_pool.pop(0)
+            deactivated_ani['active'] = False
+            ani_pool.append(deactivated_ani)
+            ani_pool[0]['active'] = True
         return ani_pool
 
     def send_new_request(self, config, reason):
