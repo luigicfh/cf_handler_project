@@ -311,19 +311,11 @@ class AniRotationEngine(AbstractService):
             self.config['params']['user'],
             self.config['params']['password']
         )
-        profile_obj = app_instance.get_campaign_profile(
-            config['configuration']['profiles'][0])
-        profile_config = {
-            "ANI": config['configuration']['aniPool'][0]['ani'],
-            "description": profile_obj['description'],
-            "dialingSchedule": profile_obj['dialingSchedule'],
-            "dialingTimeout": profile_obj['dialingTimeout'],
-            "initialCallPriority": profile_obj['initialCallPriority'],
-            "maxCharges": profile_obj['maxCharges'],
-            "name": profile_obj['name'],
-            "numberOfAttempts": profile_obj['numberOfAttempts'],
-        }
-        app_instance.update_campaign_profile(profile_config)
+        self.rotate_ani(
+            config['configuration']['aniPool'],
+            config['configuration']['profiles'][0],
+            app_instance
+        )
         old_ani = config['configuration']['aniPool'][1]['ani'] if len(
             config['configuration']['aniPool']) > 1 else 'ANI deleted from pool.'
         return self.notify_change(config['configuration']['aniPool'][0]['ani'], old_ani, ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
