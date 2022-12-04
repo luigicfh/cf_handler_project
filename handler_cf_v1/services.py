@@ -315,8 +315,7 @@ class AniRotationEngine(AbstractService):
             config['configuration']['aniPool'],
             config['configuration']['profiles'][0],
             app_instance,
-            True
-        )
+            True)
         old_ani = config['configuration']['aniPool'][1]['ani'] if len(
             config['configuration']['aniPool']) > 1 else 'ANI deleted from pool.'
         return self.notify_change(config['configuration']['aniPool'][0]['ani'], old_ani, ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
@@ -415,7 +414,7 @@ class AniRotationEngine(AbstractService):
         inbound_campaigns = [
             c['name'] for c in client.get_inbound_campaigns() if c['profileName'] == profile['name']]
         profile_config = {
-            "ANI": ani_pool[1]['ani'] if not on_demand else [ani_pool[0]['ani']],
+            "ANI": ani_pool[1]['ani'] if not on_demand else ani_pool[0]['ani'],
             "description": profile['description'],
             "dialingSchedule": profile['dialingSchedule'],
             "dialingTimeout": profile['dialingTimeout'],
