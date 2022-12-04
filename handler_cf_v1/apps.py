@@ -148,6 +148,12 @@ class Five9Custom(Five9):
             DNISList=dnis_list
         )
 
+    def remove_dnis_list(self, campaign_name: str, dnis_list: list):
+        return self.configuration.removeDNISFromCampaign(
+            campaignName=campaign_name,
+            DNISList=dnis_list
+        )
+
 
 class KvCore:
 

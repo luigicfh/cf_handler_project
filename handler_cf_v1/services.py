@@ -425,6 +425,8 @@ class AniRotationEngine(AbstractService):
         }
         client.update_campaign_profile(profile_config)
         for campaign in inbound_campaigns:
+            client.remove_dnis_list(
+                campaign, [ani_pool[0]['ani']] if not on_demand else [ani_pool[-1]['ani']])
             client.update_dnis_list(
                 campaign, [ani_pool[1]['ani']] if not on_demand else [ani_pool[0]['ani']])
         if not on_demand:
