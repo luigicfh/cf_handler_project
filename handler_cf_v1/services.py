@@ -304,7 +304,7 @@ class AniRotationEngine(AbstractService):
             self.job['state_msg'] = {
                 "success": True
             }
-        return super().execute_service()
+        return self.job
 
     def _execute_on_demand_service(self, config):
         app_instance = self.app(
@@ -520,7 +520,6 @@ class AniRotationEngine(AbstractService):
         body = f"""
         A new ANI has been activated for {profile} by the {reason.replace("_", " ").capitalize()} service.<br>
         New ANI: {new_ani}<br>
-        Old ANI: {old_ani}
         """
         return send_email(sender, password, recipients_list, subject, body)
 
