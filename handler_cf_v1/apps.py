@@ -274,6 +274,8 @@ class GHL:
         url = self.contact_lookup_ep + query_params
         response = requests.get(url=url, headers=headers)
         if response.status_code != 200:
+            if response.status_code == 422:
+                return None
             raise ApiError(response.status_code)
         if 'contacts' in response.json():
             contact_data = response.json()['contacts']
