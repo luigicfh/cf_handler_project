@@ -316,6 +316,7 @@ class AniRotationEngine(AbstractService):
             config['configuration']['profiles'][0],
             app_instance,
             True)
+        config["configuration"]["updated"] = datetime.today()
         old_ani = config['configuration']['aniPool'][1]['ani'] if len(
             config['configuration']['aniPool']) > 1 else 'ANI deleted from pool.'
         return self.notify_change(config['configuration']['aniPool'][0]['ani'], old_ani, ROT_TYPES[2], config['configuration']['notifications']['to'], config['configuration']['notifications']['cc'], config['configuration']['profiles'][0])
@@ -342,11 +343,14 @@ class AniRotationEngine(AbstractService):
             if config_dict['configuration']['aniPool'][1]['isSpam']:
                 update_doc(db, collection, config.id, config_dict)
                 continue
+            if config_dict["configuration"]["updated"].date() == datetime.today().date():
+                continue
             new_ani_pool = self.rotate_ani(
                 config_dict['configuration']['aniPool'],
                 config_dict['configuration']['profiles'][0],
                 app_instance)
             config_dict['configuration']['aniPool'] = new_ani_pool
+            config_dict["configuration"]["updated"] = datetime.today()
             update_doc(db, collection, config.id, config_dict)
             self.notify_change(
                 new_ani_pool[0]['ani'],
@@ -380,11 +384,14 @@ class AniRotationEngine(AbstractService):
             if config_dict['configuration']['aniPool'][1]['isSpam']:
                 update_doc(db, collection, config.id, config_dict)
                 continue
+            if config_dict["configuration"]["updated"].date() == datetime.today().date():
+                continue
             new_ani_pool = self.rotate_ani(
                 config_dict['configuration']['aniPool'],
                 config_dict['configuration']['profiles'][0],
                 app_instance)
             config_dict['configuration']['aniPool'] = new_ani_pool
+            config_dict["configuration"]["updated"] = datetime.today()
             update_doc(db, collection, config.id, config_dict)
             self.notify_change(
                 new_ani_pool[0]['ani'],
