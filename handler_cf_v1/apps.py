@@ -154,6 +154,11 @@ class Five9Custom(Five9):
             DNISList=dnis_list
         )
 
+    def add_to_dnc(self, numbers: list):
+        return self.configuration.addNumbersToDnc(numbers)
+
+    def remove_from_dnc(self, numbers: list):
+        return self.configuration.removeNumbersFromDnc(numbers)
 
 class KvCore:
 
@@ -237,6 +242,8 @@ class GHL:
         self.contact_lookup_ep = 'https://rest.gohighlevel.com/v1/contacts/lookup?'
         self.custom_fields_ep = "https://rest.gohighlevel.com/v1/custom-fields/"
         self.notes_ep = "https://rest.gohighlevel.com/v1/contacts/{}/notes/"
+        self.pipelines_ep = "https://rest.gohighlevel.com/v1/pipelines/"
+        self.opportunities_ep = "https://rest.gohighlevel.com/v1/pipelines/{}/opportunities"
 
     def get_location(self):
         headers = {
@@ -274,6 +281,8 @@ class GHL:
         url = self.contact_lookup_ep + query_params
         response = requests.get(url=url, headers=headers)
         if response.status_code != 200:
+            if response.status_code == 422:
+                return None
             raise ApiError(response.status_code)
         if 'contacts' in response.json():
             contact_data = response.json()['contacts']
@@ -315,3 +324,65 @@ class GHL:
             raise ApiError(response.status_code)
         notes_data = response.json()
         return notes_data
+
+    def get_pipelines(self):
+        pipelines_data = []
+        self.location_api_key = self.get_location(
+        )['apiKey'] if self.location_api_key is None else self.location_api_key
+        headers = { 'Authorization': f'Bearer {self.location_api_key}' }
+        url = self.pipelines_ep
+        response = requests.get(url=url, headers=headers)
+        if response.status_code != 200:
+            raise ApiError(response.status_code)
+        if 'pipelines' in response.json():
+            pipelines_data = response.json()['pipelines']
+        if len(pipelines_data) == 0:
+            return None
+        return pipelines_data
+
+    def get_opportunities(self, pipeline_id, query_params=None):
+        opportunities_data = []
+        self.location_api_key = self.get_location(
+        )['apiKey'] if self.location_api_key is None else self.location_api_key
+        headers = { 'Authorization': f'Bearer {self.location_api_key}' }
+        url = self.opportunities_ep.format(pipeline_id) + '?query=' + query_params if query_params else self.opportunities_ep.format(pipeline_id)
+        response = requests.get(url=url, headers=headers)
+        if response.status_code != 200:
+            raise ApiError(response.status_code)
+        if 'opportunities' in response.json():
+            opportunities_data = response.json()['opportunities']
+        if len(opportunities_data) == 0:
+            return None
+        return opportunities_data
+
+    def create_opportunity(self, pipeline_id, data):
+        opportunity_data = []
+        self.location_api_key = self.get_location(
+        )['apiKey'] if self.location_api_key is None else self.location_api_key
+        headers = {
+            'Authorization': f'Bearer {self.location_api_key}',
+            'Content-Type': 'application/json'
+        }
+        url = self.opportunities_ep.format(pipeline_id) + '/'
+        payload = json.dumps(data)
+        response = requests.post(url=url, headers=headers, data=payload)
+        if response.status_code != 200:
+            raise ApiError(response.status_code)
+        opportunity_data = response.json()
+        return opportunity_data
+
+    def update_opportunity(self, pipeline_id, opportunity_id, data):
+        opportunity_data = []
+        self.location_api_key = self.get_location(
+        )['apiKey'] if self.location_api_key is None else self.location_api_key
+        headers = {
+            'Authorization': f'Bearer {self.location_api_key}',
+            'Content-Type': 'application/json'
+        }
+        url = self.opportunities_ep.format(pipeline_id) + '/' + str(opportunity_id)
+        payload = json.dumps(data)
+        response = requests.put(url=url, headers=headers, data=payload)
+        if response.status_code != 200:
+            raise ApiError(response.status_code)
+        opportunity_data = response.json()
+        return opportunity_data
