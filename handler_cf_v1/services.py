@@ -737,3 +737,187 @@ class Five9ToGHL(AbstractService):
                 value[4:6], value[6:8], value[:4], value[8:10], value[10:12])
         else:
             pass
+
+class GHLPipelineSync(AbstractService):
+
+    """
+    Pipeline Sync Service
+    Jira ATPB-1
+
+    ENV variables
+    SENDER=str
+    PASSWOR=str
+    RECIPIENTS=list
+    """
+
+    """
+    Service Configuration Structure
+    {
+        'className': 'str',
+        'webHook': 'str',
+        'appClassName': 'str',
+        'params': {
+            'apiKey': 'str',
+            'locationId': 'str',
+            'stageToAddDnc': 'str',
+            'user': 'str',
+            'password': 'str'
+        },
+        'created': DatetimeWithNanoseconds,
+        'webHookDev': 'str',
+        'webHook': 'str',
+        'name': 'str'
+    }
+    """
+
+    """
+    Job data structure
+    {
+        "request": {
+            "full_name": "str",
+            "email": "str",
+            "phone": "str",
+            "tags": "str",
+            "company_name": "str",
+            "opportunity_name": "str",
+            "status": "str",
+            "lead_value": int,
+            "source": "str",
+            "pipleline_stage": "str",
+            "pipeline_name": "str",
+        },
+        "state_msg": str or dict (depends on state),
+        "service_instance": dict,
+        "retry_attempt": int,
+        "created": datetime,
+        "state": str
+    }
+
+    """""
+
+    def __init__(self, config: dict, job: dict, app: GHL) -> None:
+        self.config = config
+        self.job = job
+        self.app = app
+        self.data = self.job['request']
+        super().__init__(config, job, app)
+
+    def execute_service(self):
+        if self.data['phone'] == "" and self.data['email'] == "":
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Request missing phone and email."
+            return self.job
+        app_instance = self.app(self.config['params']['apiKey'], self.config['params']['locationId'])
+        query = f"phone=+1{self.data['phone']}&email={self.data['email']}"
+        contact = app_instance.contact_lookup(query)
+        if contact is None:
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Contact not found, skipping update."
+            return self.job
+        pipeline = GHLPipelineSync.search_pipeline(
+            self.data['pipeline_name'], app_instance.get_pipelines())
+        if pipeline is None:
+            GHLPipelineSync.send_notification(f"Pipeline {self.data['pipeline_name']}", "Pipeline", self.config['name'])
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Pipeline not found, skipping update."
+            return self.job
+        stage = GHLPipelineSync.search_stage(
+            self.data['pipleline_stage'], pipeline['stages'], self.config['params']['stageToAddDnc'])
+        if stage is None:
+            GHLPipelineSync.send_notification(f"Stage {self.data['pipleline_stage']} on Pipeline {pipeline['name']}", "Stage", self.config['name'])
+            self.job['state'] = JOB_STATES[2]
+            self.job['state_msg'] = f"Stage not found, skipping update."
+            return self.job
+        data = {
+            "title": self.data['opportunity_name'],
+            "status": self.data['status'],
+            "stageId": stage['id'],
+            "email": self.data['email'],
+            "phone": self.data['phone'],
+            "monetaryValue": self.data['lead_value'],
+            "source": self.data['source'],
+            "contactId": self.data['contact_id'],
+            "name": self.data['full_name'],
+            "companyName": self.data['company_name'],
+            "tags": self.data['tags'].split(",")
+        }
+        opportunities = app_instance.get_opportunities(pipeline['id'], f"{self.data['phone']}&{self.data['email']}")
+        if opportunities is None:
+            self.job = GHLPipelineSync.create_opportunity(self.app, pipeline['id'], data, stage, self.config, self.job)
+        else:
+            self.job = GHLPipelineSync.update_opportunity(self.app,pipeline['id'],opportunities[0]['id'], data, stage, self.config, self.job)
+        self.job['state'] = JOB_STATES[1]
+        return self.job
+
+    @classmethod
+    def create_opportunity(cls, app: GHL, pipeline_id: str, data: dict, stage: dict, config: dict, job: dict) -> dict:
+        app_instance = app(config['params']['apiKey'], config['params']['locationId'])
+        new_opportunity = app_instance.create_opportunity(pipeline_id, data)
+        return GHLPipelineSync.add_phone_to_dnc(data['phone'], config, job, stage, new_opportunity, "created")
+
+    @classmethod
+    def update_opportunity(cls, app: GHL, pipeline_id: str, opportunity_id: str, data: dict, stage: dict, config: dict, job: dict) -> dict:
+        app_instance = app(config['params']['apiKey'], config['params']['locationId'])
+        opportunity_updated = app_instance.update_opportunity(pipeline_id, opportunity_id, data)
+        return GHLPipelineSync.add_phone_to_dnc(data['phone'], config, job, stage, opportunity_updated, "updated")
+
+    @classmethod
+    def add_phone_to_dnc(cls, phone: str, config: dict, job: dict, stage: dict, opportunity: dict, state_opp: str) -> dict:
+        if phone == "":
+            job['state_msg'] = {
+                f"opportunity_{state_opp}": opportunity
+            }
+            return job
+        if stage['add_dnc']:
+            five9_client = Five9Custom(
+                config['params']['user'],
+                config['params']['password']
+            )
+            phone = phone.replace('+1', '')
+            phone_number = [int(phone)]
+            five9_response = five9_client.add_to_dnc(phone_number)
+            job['state_msg'] = {
+                f"opportunity_{state_opp}": opportunity,
+                "dnc_added": five9_response
+            }
+            return job
+        job['state_msg'] = {
+            f"opportunity_{state_opp}": opportunity
+        }
+        return job
+
+    @classmethod
+    def search_pipeline(cls, pipeline_name: str, pipelines: list) -> dict:
+        for pipeline in pipelines:
+            if pipeline['name'] == pipeline_name:
+                return pipeline
+        return None
+
+    @classmethod
+    def search_stage(cls, stage_name: str, stages: list, stageToAddDnc: dict) -> dict:
+        _stage_position = None
+        for stage in stages:
+            if stage['name'] == stageToAddDnc:
+                _stage_position = stages.index(stage)
+            if stage['name'] == stage_name:
+                if _stage_position is None:
+                    stage['add_dnc'] = False
+                    return stage
+                stage['add_dnc'] = True if stages.index(stage) >= _stage_position else False
+                return stage
+            stage['add_dnc'] = False
+        return None
+
+    @classmethod
+    def send_notification(cls, missing_msg: str, missing_attribute: str, campaign_name: dict):
+        sender = os.environ.get('SENDER', ENV_VAR_MSG)
+        password = os.environ.get('PASSWORD', ENV_VAR_MSG)
+        recipients = os.environ.get('RECIPIENTS', ENV_VAR_MSG).split(",")
+        subject = f"GHL Pipeline Sync Notifications | Missing {missing_attribute} Identified"
+        body = f"""
+        <p>Hi,</p><br/>
+        <p>Missing {missing_attribute} identified for {campaign_name}.</p>
+        <p>Please create the {missing_msg} and re-run the pipeline sync.</p><br/>
+        <p>Thanks</p>
+        """
+        return send_email(sender, password, recipients, subject, body)
