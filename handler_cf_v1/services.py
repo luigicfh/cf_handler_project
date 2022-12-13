@@ -326,7 +326,6 @@ class AniRotationEngine(AbstractService):
             config_dict = config.to_dict()
             self.send_new_request(config_dict, req_type)
             update_doc(db, collection, config.id, config_dict)
-        return
 
     def _execute_auto_rotation_service(self, query, db, collection):
         app_instance = self.app(
@@ -343,7 +342,7 @@ class AniRotationEngine(AbstractService):
             if config_dict['configuration']['aniPool'][1]['isSpam']:
                 update_doc(db, collection, config.id, config_dict)
                 continue
-            if config_dict["configuration"]["updated"].date() == datetime.today().date():
+            if "updated" in config_dict["configuration"] and config_dict["configuration"]["updated"].date() == datetime.today().date():
                 continue
             new_ani_pool = self.rotate_ani(
                 config_dict['configuration']['aniPool'],
@@ -384,7 +383,7 @@ class AniRotationEngine(AbstractService):
             if config_dict['configuration']['aniPool'][1]['isSpam']:
                 update_doc(db, collection, config.id, config_dict)
                 continue
-            if config_dict["configuration"]["updated"].date() == datetime.today().date():
+            if "updated" in config_dict["configuration"] and config_dict["configuration"]["updated"].date() == datetime.today().date():
                 continue
             new_ani_pool = self.rotate_ani(
                 config_dict['configuration']['aniPool'],
