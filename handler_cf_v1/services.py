@@ -748,7 +748,6 @@ class GHLPipelineSync(AbstractService):
     ENV variables
     SENDER=str
     PASSWOR=str
-    RECIPIENTS=list
     """
 
     """
@@ -762,7 +761,8 @@ class GHLPipelineSync(AbstractService):
             'locationId': 'str',
             'stageToAddDnc': 'str',
             'user': 'str',
-            'password': 'str'
+            'password': 'str',
+            'recipients': list
         },
         'created': DatetimeWithNanoseconds,
         'webHookDev': 'str',
@@ -803,7 +803,7 @@ class GHLPipelineSync(AbstractService):
         self.data = self.job['request']
         super().__init__(config, job, app)
 
-    def execute_service(self):
+    def execute_service(self) -> dict:
         if self.data['phone'] == "" and self.data['email'] == "":
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Request missing phone and email."
@@ -818,31 +818,31 @@ class GHLPipelineSync(AbstractService):
         pipeline = GHLPipelineSync.search_pipeline(
             self.data['pipeline_name'], app_instance.get_pipelines())
         if pipeline is None:
-            GHLPipelineSync.send_notification(f"Pipeline {self.data['pipeline_name']}", "Pipeline", self.config['name'])
+            GHLPipelineSync.send_notification(f"Pipeline {self.data['pipeline_name']}", "Pipeline", self.config['name'], self.config['params']['recipients'])
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Pipeline not found, skipping update."
             return self.job
         stage = GHLPipelineSync.search_stage(
             self.data['pipleline_stage'], pipeline['stages'], self.config['params']['stageToAddDnc'])
         if stage is None:
-            GHLPipelineSync.send_notification(f"Stage {self.data['pipleline_stage']} on Pipeline {pipeline['name']}", "Stage", self.config['name'])
+            GHLPipelineSync.send_notification(f"Stage {self.data['pipleline_stage']} on Pipeline {pipeline['name']}", "Stage", self.config['name'], self.config['params']['recipients'])
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Stage not found, skipping update."
             return self.job
         data = {
-            "title": self.data['opportunity_name'],
+            "title": self.data['opportunity_name'] if self.data['opportunity_name'] != "" else "They Doe",
             "status": self.data['status'],
             "stageId": stage['id'],
             "email": self.data['email'],
             "phone": self.data['phone'],
             "monetaryValue": self.data['lead_value'],
             "source": self.data['source'],
-            "contactId": self.data['contact_id'],
+            "contactId": contact['id'],
             "name": self.data['full_name'],
             "companyName": self.data['company_name'],
-            "tags": self.data['tags'].split(",")
+            "tags": self.data['tags'].split(",") if self.data['tags'] != "" else []
         }
-        opportunities = app_instance.get_opportunities(pipeline['id'], f"{self.data['phone']}&{self.data['email']}")
+        opportunities = app_instance.get_opportunities(pipeline['id'], f"{self.data['phone'] if self.data['phone'] != '' else self.data['email']}")
         if opportunities is None:
             self.job = GHLPipelineSync.create_opportunity(self.app, pipeline['id'], data, stage, self.config, self.job)
         else:
@@ -895,10 +895,10 @@ class GHLPipelineSync(AbstractService):
         return None
 
     @classmethod
-    def search_stage(cls, stage_name: str, stages: list, stageToAddDnc: dict) -> dict:
+    def search_stage(cls, stage_name: str, stages: list, stage_to_add_dnc: str) -> dict:
         _stage_position = None
         for stage in stages:
-            if stage['name'] == stageToAddDnc:
+            if stage['name'] == stage_to_add_dnc:
                 _stage_position = stages.index(stage)
             if stage['name'] == stage_name:
                 if _stage_position is None:
@@ -910,15 +910,14 @@ class GHLPipelineSync(AbstractService):
         return None
 
     @classmethod
-    def send_notification(cls, missing_msg: str, missing_attribute: str, campaign_name: dict):
+    def send_notification(cls, missing_msg: str, missing_attribute: str, campaign_name: str, recipients: list) -> None:
         sender = os.environ.get('SENDER', ENV_VAR_MSG)
         password = os.environ.get('PASSWORD', ENV_VAR_MSG)
-        recipients = os.environ.get('RECIPIENTS', ENV_VAR_MSG).split(",")
         subject = f"GHL Pipeline Sync Notifications | Missing {missing_attribute} Identified"
         body = f"""
-        <p>Hi,</p><br/>
-        <p>Missing {missing_attribute} identified for {campaign_name}.</p>
-        <p>Please create the {missing_msg} and re-run the pipeline sync.</p><br/>
+        <p>Hi,</p>
+        <p>A missing {missing_attribute} has been identified for {campaign_name}.</p>
+        <p>Please create the {missing_msg}.</p>
         <p>Thanks</p>
         """
         return send_email(sender, password, recipients, subject, body)
