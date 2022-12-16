@@ -762,7 +762,8 @@ class GHLPipelineSync(AbstractService):
             'stageToAddDnc': 'str',
             'user': 'str',
             'password': 'str',
-            'recipients': list
+            'recipients': list,
+            'requiredFields': list
         },
         'created': DatetimeWithNanoseconds,
         'webHookDev': 'str',
@@ -804,6 +805,7 @@ class GHLPipelineSync(AbstractService):
         super().__init__(config, job, app)
 
     def execute_service(self) -> dict:
+        self.data = GHLPipelineSync.set_data_fields_complete(self.data, self.config['params']['requiredFields'])
         if self.data['phone'] == "" and self.data['email'] == "":
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Request missing phone and email."
@@ -921,3 +923,12 @@ class GHLPipelineSync(AbstractService):
         <p>Thanks</p>
         """
         return send_email(sender, password, recipients, subject, body)
+
+    @classmethod
+    def set_data_fields_complete(cls, data: dict, keys_fields: list) -> dict:
+        for key_field in keys_fields:
+            if key_field not in data:
+                if key_field == 'lead_value':
+                    data[key_field] = 0
+                data[key_field] = ""
+        return data
