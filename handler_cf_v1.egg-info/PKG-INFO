@@ -1,14 +1,15 @@
 Metadata-Version: 2.1
 Name: handler-cf-v1
-Version: 1.0.57
+Version: 1.0.60
 Summary: Testing installation of Package
 Home-page: https://github.com/luigicfh/cf_handler_module
-Download-URL: https://github.com/luigicfh/cf_handler_module/archive/refs/tags/1.0.57.tar.gz
 Author: Luis Moreno
 Author-email: luis.cfh.90@gmail.com
 License: MIT
+Download-URL: https://github.com/luigicfh/cf_handler_module/archive/refs/tags/1.0.60.tar.gz
 Project-URL: Bug Tracker, https://github.com/luigicfh/cf_handler_module/issues
 Keywords: pypi,handler_module,cloud_functions
+Platform: UNKNOWN
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
 Classifier: Topic :: Software Development :: Documentation
@@ -23,3 +24,5 @@ License-File: LICENSE
 
 # cf_handler_project
  A collection of application and services to use in Cloud Functions
+
+
