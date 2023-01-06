@@ -810,6 +810,7 @@ class GHLPipelineSync(AbstractService):
             self.job['state_msg'] = f"Request missing phone and email."
             return self.job
         app_instance = self.app(self.config['params']['apiKey'], self.config['params']['locationId'])
+        emitter_app_instance = self.app(self.config['params']['emitterApiKey'], self.data['location']['id'])
         query = f"phone=+1{self.data['phone']}&email={self.data['email']}"
         contact = app_instance.contact_lookup(query)
         if contact is None:
@@ -817,21 +818,23 @@ class GHLPipelineSync(AbstractService):
             self.job['state_msg'] = f"Contact not found, skipping update."
             return self.job
         pipeline = GHLPipelineSync.search_pipeline(
-            self.data['pipeline_name'], app_instance.get_pipelines())
-        if pipeline is None:
-            GHLPipelineSync.send_notification(f"Pipeline {self.data['pipeline_name']}", "Pipeline", self.config['name'], self.config['params']['recipients'])
+            self.data['pipeline_name'], app_instance.get_pipelines(), emitter_app_instance.get_pipelines())
+        if pipeline['pipeline'] is None:
+            GHLPipelineSync.send_notification(f"""Pipeline <b>{pipeline['emitter_pipeline']['name']}</b>, with the following stages:<br>
+                {"<br>".join([stage['name'] for stage in pipeline['emitter_pipeline']['stages']])}""", "Pipeline", self.config['name'], self.config['params']['recipients'])
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Pipeline not found, skipping update."
             return self.job
         stage = GHLPipelineSync.search_stage(
-            self.data['pipleline_stage'], pipeline['stages'], self.config['params']['stageToAddDnc'])
+            self.data['pipleline_stage'], pipeline['pipeline']['stages'], self.config['params']['stageToAddDnc'])
         if stage is None:
-            GHLPipelineSync.send_notification(f"Stage {self.data['pipleline_stage']} on Pipeline {pipeline['name']}", "Stage", self.config['name'], self.config['params']['recipients'])
+            GHLPipelineSync.send_notification(f"""Stage <b>{self.data['pipleline_stage']}</b> in the <b>{pipeline['emitter_pipeline']['name']}</b> Pipeline, with the following order:<br>
+                {"<br>".join([stage['name'] for stage in pipeline['emitter_pipeline']['stages']])}""", "Stage", self.config['name'], self.config['params']['recipients'])
             self.job['state'] = JOB_STATES[2]
             self.job['state_msg'] = f"Stage not found, skipping update."
             return self.job
         data = {
-            "title": self.data['opportunity_name'] if self.data['opportunity_name'] != "" else "They Doe",
+            "title": self.data['opportunity_name'] if self.data['opportunity_name'] != "" else self.data['phone'] if self.data['phone'] != "" else self.data['email'],
             "status": self.data['status'],
             "stageId": stage['id'],
             "email": self.data['email'],
@@ -843,11 +846,11 @@ class GHLPipelineSync(AbstractService):
             "companyName": self.data['company_name'],
             "tags": self.data['tags'].split(",") if self.data['tags'] != "" else []
         }
-        opportunities = app_instance.get_opportunities(pipeline['id'], f"{self.data['phone'] if self.data['phone'] != '' else self.data['email']}")
+        opportunities = app_instance.get_opportunities(pipeline['pipeline']['id'], f"{self.data['phone'] if self.data['phone'] != '' else self.data['email']}")
         if opportunities is None:
-            self.job = GHLPipelineSync.create_opportunity(self.app, pipeline['id'], data, stage, self.config, self.job)
+            self.job = GHLPipelineSync.create_opportunity(self.app, pipeline['pipeline']['id'], data, stage, self.config, self.job)
         else:
-            self.job = GHLPipelineSync.update_opportunity(self.app,pipeline['id'],opportunities[0]['id'], data, stage, self.config, self.job)
+            self.job = GHLPipelineSync.update_opportunity(self.app,pipeline['pipeline']['id'],opportunities[0]['id'], data, stage, self.config, self.job)
         self.job['state'] = JOB_STATES[1]
         return self.job
 
@@ -889,11 +892,18 @@ class GHLPipelineSync(AbstractService):
         return job
 
     @classmethod
-    def search_pipeline(cls, pipeline_name: str, pipelines: list) -> dict:
+    def search_pipeline(cls, pipeline_name: str, pipelines: list, emitter_pipelines: list) -> dict:
+        emmiter_pipeline = [pipeline for pipeline in emitter_pipelines if pipeline['name'] == pipeline_name][0]
         for pipeline in pipelines:
             if pipeline['name'] == pipeline_name:
-                return pipeline
-        return None
+                return {
+                    "pipeline": pipeline,
+                    "emitter_pipeline": emmiter_pipeline
+                }
+        return {
+            "pipeline": None,
+            "emitter_pipeline": emmiter_pipeline
+        }
 
     @classmethod
     def search_stage(cls, stage_name: str, stages: list, stage_to_add_dnc: str) -> dict:
